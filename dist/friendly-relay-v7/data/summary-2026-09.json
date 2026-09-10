@@ -1,0 +1,226 @@
+{
+  "period": "2026-09",
+  "periodStart": "2026-09-01",
+  "periodEnd": "2026-09-08",
+  "partial": true,
+  "weekdayDays": 6,
+  "holidayDays": 2,
+  "stations": 3412,
+  "stationsWithWeekdayUsage": 3355,
+  "hourlyRows": {
+    "平日": 80613,
+    "假日": 80474
+  },
+  "halfHourlyRows": {
+    "平日": 66632,
+    "假日": 20345
+  },
+  "rateCells": {
+    "平日": 160944,
+    "假日": 160800
+  },
+  "eventTotals": {
+    "滿借": 35522,
+    "空還": 147839
+  },
+  "sourceHourlyParity": {
+    "eventMismatches": 0,
+    "dispatchMismatches": 0
+  },
+  "sources": {
+    "stationSnapshot": {
+      "file": "station-yb2_2026-09-09.json",
+      "bytes": 6211695,
+      "sha256": "914c220efc3eea2497a00ee1be909adba73d492faff8d2beb737049bc9526248",
+      "templateStations": 3345,
+      "templateStationsWithoutSno": 0,
+      "publicOperatingStations": 3400,
+      "publicStationsAppended": 67
+    },
+    "stationMetadata": {
+      "file": "stations.json",
+      "stations": 3389,
+      "sha256": "19ba590643d16e0acd21e59044b82972013310b04e5418ad5c6468574585f960",
+      "historicalCodeAliases": [
+        {
+          "code": "500103091",
+          "canonicalCode": "500107210"
+        }
+      ]
+    },
+    "usage": {
+      "mode": "raw-cps",
+      "files": [
+        {
+          "file": "cps_taipei_yb20_2026-09-01_2026-09-08.xlsx",
+          "vehicle": "yb20",
+          "dates": [
+            "2026-09-01",
+            "2026-09-02",
+            "2026-09-03",
+            "2026-09-04",
+            "2026-09-05",
+            "2026-09-06",
+            "2026-09-07",
+            "2026-09-08"
+          ],
+          "rows": 14158,
+          "borrowTotal": 1404197,
+          "bytes": 1792238,
+          "sha256": "ed7395732f2b948eecfe2698804c4a39e357162374875e5348fc257d8d173691"
+        },
+        {
+          "file": "cps_taipei_yb20e_2026-09-01_2026-09-08.xlsx",
+          "vehicle": "yb20e",
+          "dates": [
+            "2026-09-01",
+            "2026-09-02",
+            "2026-09-03",
+            "2026-09-04",
+            "2026-09-05",
+            "2026-09-06",
+            "2026-09-07",
+            "2026-09-08"
+          ],
+          "rows": 13665,
+          "borrowTotal": 147176,
+          "bytes": 1042692,
+          "sha256": "7846930b67622624881d52ef9104755b819fecb5ed3318cb4f9ed00ed42af9f9"
+        },
+        {
+          "file": "cps_newtaipei_yb20_2026-09-01_2026-09-08.xlsx",
+          "vehicle": "yb20",
+          "dates": [
+            "2026-09-01",
+            "2026-09-02",
+            "2026-09-03",
+            "2026-09-04",
+            "2026-09-05",
+            "2026-09-06",
+            "2026-09-07",
+            "2026-09-08"
+          ],
+          "rows": 12478,
+          "borrowTotal": 790838,
+          "bytes": 1450930,
+          "sha256": "68046b75163362ceec40412c07bed90d7908806e0f600565bcccde335b44fdaf"
+        },
+        {
+          "file": "cps_newtaipei_yb20e_2026-09-01_2026-09-08.xlsx",
+          "vehicle": "yb20e",
+          "dates": [
+            "2026-09-01",
+            "2026-09-02",
+            "2026-09-03",
+            "2026-09-04",
+            "2026-09-05",
+            "2026-09-06",
+            "2026-09-07",
+            "2026-09-08"
+          ],
+          "rows": 11422,
+          "borrowTotal": 79303,
+          "bytes": 777605,
+          "sha256": "97a714949818ca2fbf62ee68e23e34d885ac4603d46093eafbc8c078ceaaa3d0"
+        }
+      ]
+    },
+    "rates": {
+      "mode": "raw-report",
+      "files": [
+        {
+          "file": "report_taipei_2026-09-01_08.json",
+          "rows": 28304,
+          "includedRows": 28304,
+          "dates": [
+            "2026-09-01",
+            "2026-09-02",
+            "2026-09-03",
+            "2026-09-04",
+            "2026-09-05",
+            "2026-09-06",
+            "2026-09-07",
+            "2026-09-08"
+          ],
+          "bytes": 14302563,
+          "sha256": "a650b27ef30d2d8129fe4b0faf47484cd9cfb7348342d2af26961e6071388d7d"
+        },
+        {
+          "file": "report_newtaipei_2026-09-01_08.json",
+          "rows": 25248,
+          "includedRows": 25248,
+          "dates": [
+            "2026-09-01",
+            "2026-09-02",
+            "2026-09-03",
+            "2026-09-04",
+            "2026-09-05",
+            "2026-09-06",
+            "2026-09-07",
+            "2026-09-08"
+          ],
+          "bytes": 12678431,
+          "sha256": "04ca73ae1c91734f6933398c8eb1c23f56e37d393c86a79d25cb9f2c9caa121d"
+        }
+      ],
+      "invalidRateValues": 0
+    },
+    "reward": {
+      "files": 52,
+      "directory": "raw_2026-08_09",
+      "sourceRows": 1042302,
+      "duplicateRows": 17436,
+      "uniqueOrders": 1024866,
+      "mobileOrders": 994005,
+      "includedEvents": {
+        "滿借": 35522,
+        "空還": 147839
+      },
+      "ambiguousStationNames": 0,
+      "ambiguousEvents": 0,
+      "ambiguousExamples": [],
+      "denominators": {
+        "平日": 6,
+        "假日": 2
+      }
+    },
+    "dispatch": {
+      "files": [
+        {
+          "file": "vds_task_taipei_2026-09-01_08.xlsx",
+          "schema": "staff-info",
+          "counts": {
+            "sourceRows": 33408,
+            "matchedRows": 29044,
+            "調出": 8299,
+            "調入": 10051,
+            "綁車": 5129,
+            "解綁車": 5565
+          },
+          "bytes": 2297094,
+          "sha256": "1f3d5f54c9e0cd5a4c1cd6b77097194e834c995c72706bfc7699781d0cc5f516"
+        },
+        {
+          "file": "vds_task_newtaipei_2026-09-01_08.xlsx",
+          "schema": "staff-info",
+          "counts": {
+            "sourceRows": 37273,
+            "matchedRows": 33227,
+            "調出": 9410,
+            "調入": 11117,
+            "解綁車": 6719,
+            "綁車": 5981
+          },
+          "bytes": 2574128,
+          "sha256": "b17399e249594bcb969c84bb4e5aa47219f4556033c87358d04b4b2414926b37"
+        }
+      ],
+      "unmatchedStations": 0
+    }
+  },
+  "output": {
+    "file": "data\\heatmap-2026-09.js",
+    "bytes": 8048809,
+    "sha256": "845529278dc16fb52492b635dc60947e779f4e088c3b4dae1c362f55e8782ed2"
+  }
+}

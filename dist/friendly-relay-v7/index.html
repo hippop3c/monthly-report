@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>雙北 YouBike 半小時熱力圖 V7版</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#17324d;background:#eef4f7}*{box-sizing:border-box}body{margin:0;overflow-x:hidden}.app{display:grid;grid-template-rows:auto 1fr;height:100vh}.toolbar{position:relative;background:#0b3954;color:#fff;padding:12px 16px;box-shadow:0 2px 8px #0003;z-index:2000}.title-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}.title-row h1{font-size:20px;margin:0;white-space:nowrap;flex:none}.title-right{display:flex;align-items:center;gap:14px;min-width:0}.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:10px;align-items:end}.control{display:flex;flex-direction:column;gap:4px;position:relative}.control>label{font-size:12px;color:#cdeaf2}.multi summary,.control button,.control select,.usage-filter,.toggle-control{height:36px;border:1px solid #8ab7c5;border-radius:6px;background:#fff;color:#17324d;padding:8px 10px;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.multi summary,.control button,.control select{cursor:pointer}.control select{width:100%;font:inherit}.multi summary::-webkit-details-marker{display:none}.multi summary:after{content:'▾';float:right}.multi[open] summary:after{content:'▴'}.options{position:absolute;top:40px;left:0;min-width:220px;max-height:280px;overflow:auto;background:#fff;color:#17324d;border:1px solid #8ab7c5;border-radius:8px;box-shadow:0 6px 20px #0004;padding:8px;z-index:2200}.options label{display:flex;align-items:center;gap:8px;padding:5px;border-radius:4px}.options label:hover{background:#e8f4f5}.option-actions{display:flex;gap:6px;position:sticky;top:-8px;background:#fff;padding:4px 0 7px}.option-actions button{height:28px;padding:2px 8px;border:1px solid #aacbd4;border-radius:4px;background:#eef7f8;color:#17324d}.cat-swatch{display:inline-block;width:11px;height:11px;border-radius:3px;flex:0 0 auto}.hour-wrap{display:flex;align-items:center;gap:8px;height:36px}.hour-wrap input{min-width:80px;width:100%}.hour-value{min-width:52px;font-variant-numeric:tabular-nums;font-weight:700}.play{background:#f4a261!important;border-color:#f4a261!important;font-weight:700}.usage-filter{display:flex;align-items:center;gap:7px;padding:5px 9px}.usage-filter input{width:74px;min-width:0;border:1px solid #b3cbd4;border-radius:4px;padding:4px 6px;color:#17324d;font-weight:700;font-variant-numeric:tabular-nums}.toggle-control{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}.toggle-control input{position:absolute;opacity:0;pointer-events:none}.toggle-track{position:relative;width:38px;height:20px;border-radius:999px;background:#9aaab2;flex:0 0 auto;transition:.18s}.toggle-track:after{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0004;transition:.18s}.toggle-control input:checked+.toggle-track{background:#1f7a46}.toggle-control input:checked+.toggle-track:after{transform:translateX(18px)}
+    .search-box{position:relative}.search-box input{height:34px;width:230px;max-width:48vw;border:1px solid #8ab7c5;border-radius:6px;padding:6px 32px 6px 10px;font-size:14px;color:#17324d}.search-clear{position:absolute;right:6px;top:6px;width:22px;height:22px;border:none;border-radius:50%;background:#dce9ee;color:#0b3954;cursor:pointer;font-size:14px;line-height:1;display:none}.search-clear.show{display:block}.search-list{position:absolute;top:38px;right:0;left:0;background:#fff;color:#17324d;border:1px solid #8ab7c5;border-radius:8px;box-shadow:0 6px 20px #0004;max-height:300px;overflow:auto;z-index:1400;display:none}.search-list.open{display:block}.search-item{padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #eef4f7}.search-item:last-child{border-bottom:none}.search-item:hover,.search-item.active{background:#e8f4f5}.search-item b{font-weight:700}.search-item small{color:#5b7280;margin-left:6px}.search-empty{padding:9px 10px;color:#5b7280;font-size:13px}
+    .map-wrap{position:relative;min-height:0}#map{height:100%;width:100%}.legend{position:absolute;right:12px;bottom:28px;z-index:800;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 2px 12px #0003;min-width:235px;max-width:330px}.legend-row{display:grid;grid-template-columns:16px auto 1fr 52px;gap:6px;align-items:center;font-size:12px;margin-top:6px}.legend-row.case{grid-template-columns:16px 1fr}.legend-empty{font-size:11px;color:#5b7280;margin-top:7px;line-height:1.5}.gradient{height:10px;border-radius:5px}.legend-title{font-weight:700}.rate-legend{margin-top:8px;padding-top:8px;border-top:1px solid #e4edf1}.rate-legend:first-child{border-top:0;margin-top:5px;padding-top:0}.rate-legend-title{font-size:12px;font-weight:700;margin-bottom:5px}.rate-legend-symbol{display:inline-flex;align-items:center;justify-content:center;width:18px;color:#17324d;font-size:15px}.rate-bands{display:flex;gap:4px;flex-wrap:wrap}.rate-band{color:#fff;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700}.rate-band.missing{background:#7b8794}.summary{position:absolute;left:12px;bottom:28px;z-index:800;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 2px 12px #0003;font-size:13px;min-width:215px;max-width:300px}.summary-values{display:grid;grid-template-columns:16px auto 1fr;gap:4px 8px;margin-top:6px;align-items:center}.summary-values .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}.summary-note{margin-top:6px;color:#5b7280;font-size:12px}.leaflet-popup-content{line-height:1.55}.popup-title{font-weight:700;font-size:15px}.popup-grid{display:grid;grid-template-columns:auto auto;gap:2px 12px;margin-top:6px}.popup-grid span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}.popup-rate{font-weight:800}.popup-cat{color:#5b7280;grid-column:1/3;margin-top:5px;font-size:12px;border-top:1px solid #e4edf1;padding-top:4px}.popup-cases{grid-column:1/3;margin-top:5px;font-size:12px;border-top:1px solid #e4edf1;padding-top:5px}.popup-cases b{display:inline-block;color:#fff;border-radius:4px;padding:1px 6px;margin:2px 3px 0 0;font-weight:600}
+    .matrix-panel{position:absolute;top:12px;left:52px;z-index:900;width:min(720px,calc(100% - 64px));background:#fff;border:1px solid #c7d9e1;border-radius:11px;box-shadow:0 4px 18px #0004;overflow:hidden}.matrix-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:#0b3954;color:#fff}.matrix-title{display:flex;align-items:baseline;gap:10px;min-width:0}.matrix-title strong{font-size:16px}.matrix-scope{font-size:13px;color:#cdeaf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.matrix-collapse{border:1px solid #7ba9ba;border-radius:5px;background:#fff;color:#17324d;padding:4px 9px;cursor:pointer;font-weight:700}.matrix-body{padding:9px 11px 11px}.matrix-panel.collapsed .matrix-body{display:none}.matrix-tabs{display:flex;gap:6px;margin-bottom:7px}.matrix-tab{flex:1;border:1px solid #9ebdca;border-radius:6px;background:#edf5f7;color:#17324d;padding:7px 8px;cursor:pointer;font-size:14px;font-weight:700}.matrix-tab.active{background:#1f6f78;border-color:#1f6f78;color:#fff}.matrix-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.matrix-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.35;font-variant-numeric:tabular-nums}.matrix-table th,.matrix-table td{border:1px solid #cbdce3;padding:8px;text-align:center}.matrix-table thead th{background:#dceaf0;color:#17324d;white-space:nowrap}.matrix-table .matrix-scenario{text-align:left;min-width:195px;color:#17324d;background:#f3f7f9}.matrix-table tr:nth-child(1) .matrix-scenario{border-left:5px solid #0f766e}.matrix-table tr:nth-child(2) .matrix-scenario{border-left:5px solid #d92d20}.matrix-table tr:nth-child(3) .matrix-scenario{border-left:5px solid #c47c06}.matrix-table tr:nth-child(4) .matrix-scenario{border-left:5px solid #a61b16}.matrix-double-high{background:#bfdbfe;color:#1e3a8a}.matrix-adjust{background:#dcfce7}.matrix-maintain{background:#fef3c7}.matrix-infra{background:#ffd8d3}.matrix-combined{background:#fecaca;color:#8a1c14}.matrix-missing{background:#eef2f4;color:#5b6870}.matrix-total{background:#e2e8f0;font-weight:800}.matrix-cell-count{display:block;font-size:18px;font-weight:800}.matrix-cell-action{display:block;margin-top:2px;font-size:12px;line-height:1.35}
+    @media(max-width:980px){.app{height:auto;min-height:100vh}.map-wrap{height:72vh}.title-row{align-items:stretch;flex-direction:column}.title-right{flex-direction:column;align-items:stretch}.status{white-space:normal;line-height:1.4}.search-box input{width:100%;max-width:none}.matrix-panel{top:8px;left:8px;width:calc(100% - 16px)}}
+    @media(max-width:600px){.title-row h1{font-size:17px}.summary{left:8px;bottom:8px;top:auto;max-width:235px}.legend{display:none}.matrix-body{padding:7px}.matrix-title{align-items:flex-start;flex-direction:column;gap:1px}.matrix-title strong{font-size:15px}.matrix-scope{font-size:12px}.matrix-tab{font-size:13px;padding:7px 5px}.matrix-table{font-size:13px}.matrix-table th,.matrix-table td{padding:6px 4px}.matrix-table .matrix-scenario{min-width:165px}.matrix-cell-count{font-size:17px}.matrix-cell-action{font-size:11px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="toolbar">
+      <div class="title-row">
+        <h1>雙北 YouBike 各站半小時動態熱力圖 V7版</h1>
+        <div class="title-right">
+          <div class="search-box">
+            <input id="stationSearch" type="text" placeholder="搜尋站點名稱…" autocomplete="off" aria-label="搜尋站點">
+            <button class="search-clear" id="searchClear" type="button" title="清除" aria-label="清除搜尋">×</button>
+            <div class="search-list" id="searchList"></div>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="control"><label for="monthSelect">月份</label><select id="monthSelect" aria-label="選擇資料月份"><option>載入中</option></select></div>
+        <div class="control"><label>日別（可複選）</label><details class="multi"><summary id="daySummary">平日</summary><div class="options" id="dayOptions"><label><input type="checkbox" value="平日" checked>平日</label><label><input type="checkbox" value="假日">假日</label></div></details></div>
+        <div class="control"><label>城市（可複選）</label><details class="multi"><summary id="citySummary">台北市、新北市</summary><div class="options" id="cityOptions"><label><input type="checkbox" value="台北市" checked>台北市</label><label><input type="checkbox" value="新北市" checked>新北市</label></div></details></div>
+        <div class="control"><label>行政區（可複選）</label><details class="multi"><summary id="districtSummary">全部行政區</summary><div class="options" id="districtOptions"></div></details></div>
+        <div class="control"><label>指標（可複選）</label><details class="multi"><summary id="metricSummary">滿借、調出／綁車</summary><div class="options" id="metricOptions"></div></details></div>
+        <div class="control"><label for="usageThreshold">場站平日日均用量</label><div class="usage-filter"><span>大於</span><input id="usageThreshold" type="number" min="0" max="3000" step="10" value="100" inputmode="numeric"><span>次</span></div></div>
+        <div class="control"><label for="matrixColorToggle">圖標配色</label><label class="toggle-control"><input id="matrixColorToggle" type="checkbox" role="switch" checked><span class="toggle-track" aria-hidden="true"></span><span id="matrixColorLabel">套用表格顏色</span></label></div>
+        <div class="control"><label for="hour">時段（每30分鐘）</label><div class="hour-wrap"><input id="hour" type="range" min="0" max="47" step="1" value="16"><span class="hour-value" id="hourValue">08:00</span></div></div>
+        <div class="control"><label>&nbsp;</label><button class="play" id="play" type="button">▶ 播放 48 時段</button></div>
+      </div>
+    </header>
+    <section class="map-wrap">
+      <div id="map" role="application" aria-label="雙北 YouBike 半小時熱力圖"></div>
+      <aside class="summary"><div id="selectionText"></div><div class="summary-values" id="summaryValues"></div><div class="summary-note" id="summaryNote">滿借／空還與調度為半小時；見車／見位率維持每小時</div></aside>
+      <aside class="legend"><div class="legend-title" id="legendTitle">熱區強度</div><div id="legendRows"></div></aside>
+      <aside class="matrix-panel" id="matrixPanel" aria-label="V7半小時決策矩陣">
+        <div class="matrix-header">
+          <div class="matrix-title"><strong>V7 半小時決策矩陣</strong><span class="matrix-scope" id="matrixScope">載入中</span></div>
+          <button class="matrix-collapse" id="matrixCollapse" type="button" aria-expanded="true">收合</button>
+        </div>
+        <div class="matrix-body">
+          <div class="matrix-tabs" role="tablist" aria-label="矩陣類型">
+            <button class="matrix-tab active" type="button" data-matrix-side="full" role="tab" aria-selected="true">滿借 × 綁車 × 見位率</button>
+            <button class="matrix-tab" type="button" data-matrix-side="empty" role="tab" aria-selected="false">空還 × 解綁車 × 見車率</button>
+          </div>
+          <div class="matrix-scroll">
+            <table class="matrix-table">
+              <thead><tr><th>事件 × 服務率</th><th id="matrixActionHigh">綁車 ≥7輛</th><th id="matrixActionLow">綁車 &lt;7輛</th><th>合計</th></tr></thead>
+              <tbody id="matrixRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="months.js?v=20260909-v7-3months"></script>
+  <script>
+  (() => {
+    const manifest=window.YOUBIKE_HEATMAP_MONTHS,monthSelect=document.getElementById('monthSelect'),mapElement=document.getElementById('map');
+    const fail=message=>{mapElement.innerHTML=`<div style="padding:22px 26px;font-size:15px;line-height:1.7;color:#0b3954;max-width:660px;margin:48px auto;background:#fff;border-radius:12px;box-shadow:0 3px 16px #0002"><b style="font-size:17px">⚠️ 資料載入失敗</b><br>${message}</div>`;};
+    if(!manifest||!Array.isArray(manifest.months)||manifest.months.length===0){fail('找不到月份清單 <code>months.js</code>。');return;}
+    const months=manifest.months.filter(item=>item&&/^\d{4}-\d{2}$/.test(item.id)&&typeof item.src==='string'&&item.src.length>0);
+    if(months.length===0){fail('月份清單沒有可載入的資料。');return;}
+    const requested=new URL(window.location.href).searchParams.get('month');
+    const selected=months.find(item=>item.id===requested)||months.find(item=>item.id===manifest.defaultMonth)||months[months.length-1];
+    monthSelect.innerHTML=months.map(item=>`<option value="${item.id}">${item.label||item.id}</option>`).join('');
+    monthSelect.value=selected.id;
+    monthSelect.addEventListener('change',()=>{const next=new URL(window.location.href);next.searchParams.set('month',monthSelect.value);window.location.assign(next.href);});
+    if(requested!==selected.id){const canonical=new URL(window.location.href);canonical.searchParams.set('month',selected.id);window.history.replaceState(null,'',canonical.href);}
+    mapElement.innerHTML=`<div style="padding:22px 26px;font-size:15px;line-height:1.7;color:#0b3954;max-width:660px;margin:48px auto;background:#fff;border-radius:12px;box-shadow:0 3px 16px #0002"><b style="font-size:17px">正在載入 ${selected.label||selected.id}</b></div>`;
+    const dataScript=document.createElement('script'),revision=selected.revision||manifest.version||'v7';
+    dataScript.src=`${selected.src}${selected.src.includes('?')?'&':'?'}v=${encodeURIComponent(revision)}`;
+    dataScript.onload=()=>initHeatmap(selected);
+    dataScript.onerror=()=>fail(`無法載入 ${selected.label||selected.id} 的資料檔。`);
+    document.head.appendChild(dataScript);
+  })();
+
+  function initHeatmap(activeMonth){
+    const el=id=>document.getElementById(id), hour=el('hour');
+    const D=window.YOUBIKE_HEATMAP_DATA;
+    if(!D||!D.stations){
+      el('map').innerHTML='<div style="padding:22px 26px;font-size:15px;line-height:1.7;color:#0b3954;max-width:660px;margin:48px auto;background:#fff;border-radius:12px;box-shadow:0 3px 16px #0002"><b style="font-size:17px">⚠️ 找不到月份資料</b><br>請確認 <code>months.js</code> 內的資料檔路徑及檔名正確，再重新整理。</div>';
+      return;
+    }
+    if(!D.meta||D.meta.period!==activeMonth.id){
+      el('map').innerHTML='<div style="padding:22px 26px;font-size:15px;line-height:1.7;color:#0b3954;max-width:660px;margin:48px auto;background:#fff;border-radius:12px;box-shadow:0 3px 16px #0002"><b style="font-size:17px">⚠️ 月份資料不符</b><br>載入的資料期間與所選月份不同，請更新月份清單。</div>';
+      return;
+    }
+    el('map').innerHTML='';
+    const stations=D.stations, metrics=D.metrics, N=stations.length;
+    const activeMonthLabel=activeMonth.label||D.meta.period;
+    const SLOT_COUNT=48, SLOT_MINUTES=30;
+    const timeLabel=slot=>{const minutes=slot*SLOT_MINUTES;return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;};
+    const requiredActivityMetrics=['滿借','空還','調出','綁車','調入','解綁車'];
+    const activityMetrics=Array.isArray(D.activityMetrics)?D.activityMetrics:[];
+    const activityMetricIndexes=activityMetrics.map(metric=>metrics.indexOf(metric));
+    const halfHourlyActivity=D.halfHourlyActivity;
+    const requiredDays=Object.keys(D.values||{}),activityContractValid=activityMetrics.length===requiredActivityMetrics.length&&new Set(activityMetrics).size===requiredActivityMetrics.length&&requiredActivityMetrics.every(metric=>activityMetrics.includes(metric));
+    if(!activityContractValid||!halfHourlyActivity||!requiredDays.every(day=>Array.isArray(halfHourlyActivity[day])&&halfHourlyActivity[day].length===SLOT_COUNT)||activityMetricIndexes.some(index=>index<0)){
+      el('map').innerHTML='<div style="padding:22px 26px;font-size:15px;line-height:1.7;color:#0b3954;max-width:660px;margin:48px auto;background:#fff;border-radius:12px;box-shadow:0 3px 16px #0002"><b style="font-size:17px">⚠️ 半小時資料不完整</b><br>請重新產生並上傳 V7 的月份資料檔。</div>';
+      return;
+    }
+    const dailyUsage=Array.isArray(D.dailyUsage)&&D.dailyUsage.length===N?D.dailyUsage:Array(N).fill(null);
+    const stationCapacity=Array.isArray(D.stationCapacity)&&D.stationCapacity.length===N?D.stationCapacity:Array(N).fill(null);
+    const enabledStationCapacity=Array.isArray(D.enabledStationCapacity)&&D.enabledStationCapacity.length===N?D.enabledStationCapacity:Array(N).fill(null);
+
+    // ── 指標六類（調度的綁車/解綁車伴隨調出/調入；見車／見位率各自獨立）──
+    const CATS=[
+      {key:'滿借',kind:'relay',members:['滿借'],fill:'#f4a261',ring:'#c1440e',grad:{.18:'#ffe6a0',.55:'#f4a261',1:'#d62828'},gcss:'linear-gradient(90deg,#ffe6a0,#f4a261,#d62828)'},
+      {key:'空還',kind:'relay',members:['空還'],fill:'#74c69d',ring:'#1b7d4f',grad:{.18:'#d8f3dc',.55:'#52b788',1:'#1b7d4f'},gcss:'linear-gradient(90deg,#d8f3dc,#52b788,#1b7d4f)'},
+      {key:'調出／綁車',kind:'dispatch',members:['調出','綁車'],fill:'#4ea8de',ring:'#274c9c',grad:{.18:'#cfe8ff',.55:'#4ea8de',1:'#3155a6'},gcss:'linear-gradient(90deg,#cfe8ff,#4ea8de,#3155a6)'},
+      {key:'調入／解綁車',kind:'dispatch',members:['調入','解綁車'],fill:'#b57edc',ring:'#6a189e',grad:{.18:'#ede0ff',.55:'#9d4edd',1:'#6a189e'},gcss:'linear-gradient(90deg,#ede0ff,#9d4edd,#6a189e)'},
+      {key:'見車率',kind:'rate',members:['見車率'],thresholds:{good:90,warn:80},shape:'外圈'},
+      {key:'見位率',kind:'rate',members:['見位率'],thresholds:{good:95,warn:90},shape:'內圈／虛線'}
+    ];
+    for(const c of CATS)c.idx=c.members.map(m=>metrics.indexOf(m)).filter(i=>i>=0);
+    const DEFAULT=new Set(['見車率','見位率']);
+
+    const mI={滿借:metrics.indexOf('滿借'),空還:metrics.indexOf('空還'),調出:metrics.indexOf('調出'),綁車:metrics.indexOf('綁車'),調入:metrics.indexOf('調入'),解綁車:metrics.indexOf('解綁車'),見車率:metrics.indexOf('見車率'),見位率:metrics.indexOf('見位率')};
+    const MATRIX_EVENT_T=2, MATRIX_ACTION_T=7;
+    const MATRIX_CONFIG={
+      full:{event:mI.滿借,action:mI.綁車,rate:mI.見位率,eventLabel:'滿借',actionLabel:'綁車',rateLabel:'見位率',rateThreshold:90},
+      empty:{event:mI.空還,action:mI.解綁車,rate:mI.見車率,eventLabel:'空還',actionLabel:'解綁車',rateLabel:'見車率',rateThreshold:80}
+    };
+    const MATRIX_STYLES={
+      doubleHigh:{label:'可調整調度資源',summaryLabel:'事件與調度皆高',color:'#2563eb',css:'matrix-double-high'},
+      adjust:{label:'可調整調度資源',color:'#218739',css:'matrix-adjust'},
+      maintain:{label:'維持',color:'#e6a700',css:'matrix-maintain'},
+      infrastructure:{label:'增柱／增站',color:'#ef8f88',css:'matrix-infra'},
+      combined:{label:'增加調度＋增柱／增站',color:'#d92d20',css:'matrix-combined'},
+      missing:{label:'服務率缺值',color:'#7b8794',css:'matrix-missing'}
+    };
+    let matrixSide='full';
+
+    const RATE_METRICS=new Set(['見車率','見位率']);
+    const RELAY_METRICS=new Set(['滿借','空還']);
+    const DISPATCH_METRICS=new Set(['調出','綁車','調入','解綁車']);
+    const isRateIndex=i=>RATE_METRICS.has(metrics[i]);
+    const blankValues=()=>metrics.map((_,i)=>isRateIndex(i)?null:0);
+    const RATE_COLORS={good:'#218739',warn:'#e6a700',bad:'#d92d20',missing:'#7b8794'};
+    const RATE_GRADIENT='linear-gradient(90deg,#d92d20 0 33%,#e6a700 33% 66%,#218739 66% 100%)';
+    const rateLevel=(c,value)=>!Number.isFinite(value)?'missing':value>=c.thresholds.good?'good':value>=c.thresholds.warn?'warn':'bad';
+    const rateColor=(c,value)=>RATE_COLORS[rateLevel(c,value)];
+
+    // 每個日別的 station×30分鐘×metrics 值表；率值取 slot 所屬的小時。
+    const HD={};
+    for(const day of Object.keys(D.values)){
+      const H=Array.from({length:N},()=>Array.from({length:SLOT_COUNT},blankValues));
+      for(let slot=0;slot<SLOT_COUNT;slot++){
+        const hourlyBucket=D.values[day][Math.floor(slot/2)]||[];
+        for(const row of hourlyBucket)for(let i=0;i<metrics.length;i++)if(isRateIndex(i))H[row[0]][slot][i]=row[i+1];
+        for(const row of halfHourlyActivity[day][slot]||[])for(let i=0;i<activityMetricIndexes.length;i++)H[row[0]][slot][activityMetricIndexes[i]]=row[i+1];
+      }
+      HD[day]=H;
+    }
+    const map=L.map('map',{preferCanvas:true}).setView([25.06,121.54],11);
+    const popupOptions=()=>({autoPanPaddingTopLeft:L.point(window.innerWidth>980?740:16,window.innerWidth>600?80:140),autoPanPaddingBottomRight:L.point(16,20)});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+    for(const c of CATS)c.layer=L.heatLayer([],{radius:24,blur:19,maxZoom:16,gradient:c.grad}).addTo(map);
+    // 固定圖標層級：調度在下、友愛接力在上；調度圈較大，重疊時仍看得到外圈。
+    for(const [name,z] of [['neutralPane',440],['dispatchPane',450],['relayPane',460],['ratePane',465],['matrixPane',470],['searchPane',480]]){
+      map.createPane(name);map.getPane(name).style.zIndex=z;
+    }
+    const neutralMarkers=L.layerGroup().addTo(map);
+    const dispatchMarkers=L.layerGroup().addTo(map);
+    const relayMarkers=L.layerGroup().addTo(map);
+    const rateMarkers=L.layerGroup().addTo(map);
+    const matrixMarkers=L.layerGroup().addTo(map);
+    const searchLayer=L.layerGroup().addTo(map);
+    let timer=null;
+
+    function checked(id){return [...document.querySelectorAll(`#${id} input[type=checkbox]:checked`)].map(x=>x.value)}
+    function setSummary(id,values,allText){el(id).textContent=values.length===0?'未選擇':values.length>3?`${values.length}項已選`:values.join('、')||allText}
+    function optionActions(container,onChange){const bar=document.createElement('div');bar.className='option-actions';for(const [text,value] of [['全選',true],['清除',false]]){const b=document.createElement('button');b.type='button';b.textContent=text;b.onclick=()=>{container.querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=value);onChange()};bar.appendChild(b)}container.prepend(bar)}
+    function refreshDistricts(){const cities=checked('cityOptions'),box=el('districtOptions'),previous=new Set(checked('districtOptions'));box.innerHTML='';const values=[...new Set(stations.filter(s=>cities.length===0||cities.includes(s[1])).map(s=>s[2]))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));for(const value of values){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.value=value;input.checked=previous.size===0||previous.has(value);input.onchange=render;label.append(input,document.createTextNode(value));box.appendChild(label)}optionActions(box,render);updateLabels()}
+    function updateLabels(){const days=checked('dayOptions'),cities=checked('cityOptions'),districts=checked('districtOptions'),sel=checked('metricOptions');setSummary('daySummary',days,'全部日別');setSummary('citySummary',cities,'雙北全部');el('districtSummary').textContent=districts.length===0?'未選擇':districts.length===el('districtOptions').querySelectorAll('input[type=checkbox]').length?'全部行政區':districts.length>3?`${districts.length}區已選`:districts.join('、');setSummary('metricSummary',sel,'全部指標');el('matrixColorLabel').textContent=el('matrixColorToggle').checked?'套用表格顏色':'沿用原圖標';}
+    function usageThresholdValue(){const raw=el('usageThreshold').value.trim();if(raw==='')return 100;const value=Number(raw);return Number.isFinite(value)&&value>=0?value:100;}
+    function matrixClassify(x,slot=+hour.value){
+      const cfg=MATRIX_CONFIG[matrixSide],H=HD['平日'];
+      if(!H||[cfg.event,cfg.action,cfg.rate].some(index=>index<0))return {...MATRIX_STYLES.missing,key:'missing',eventHigh:false,actionHigh:false,rateHigh:null,rate:null};
+      const values=H[x.i][slot],eventHigh=Number(values[cfg.event])>=MATRIX_EVENT_T,actionHigh=Number(values[cfg.action])>=MATRIX_ACTION_T,rate=values[cfg.rate];
+      if(!Number.isFinite(rate))return {...MATRIX_STYLES.missing,key:'missing',eventHigh,actionHigh,rateHigh:null,rate:null};
+      const rateHigh=rate>=cfg.rateThreshold;
+      const key=rateHigh?(eventHigh&&actionHigh?'doubleHigh':eventHigh===actionHigh?'adjust':'maintain'):(actionHigh?'infrastructure':'combined');
+      return {...MATRIX_STYLES[key],key,eventHigh,actionHigh,rateHigh,rate};
+    }
+
+    function combinedRows(){
+      const days=checked('dayOptions');
+      const legacyWeights={平日:Number(D.meta.weekdayDays)||0,假日:Number(D.meta.holidayDays)||0};
+      const usage=D.meta.usageFrequency||{};
+      const rateWeights={平日:Number(usage.weekdayDays)||0,假日:Number(usage.holidayDays)||0};
+      const legacyTotalDays=days.reduce((a,d)=>a+(legacyWeights[d]||0),0)||1,byStation=new Map(),slot=+hour.value;
+      const targetFor=stationIndex=>{let target=byStation.get(stationIndex);if(!target){target={average:blankValues(),total:blankValues(),rateSum:Array(metrics.length).fill(0),rateWeight:Array(metrics.length).fill(0)};byStation.set(stationIndex,target)}return target;};
+      for(const d of days){const hourlyBucket=D.values[d]?.[Math.floor(slot/2)]||[],activityBucket=halfHourlyActivity[d]?.[slot]||[],legacyDayCount=legacyWeights[d]||0,rateDayCount=rateWeights[d]||0;
+        for(const row of hourlyBucket){const target=targetFor(row[0]);for(let i=0;i<metrics.length;i++)if(isRateIndex(i)){const value=row[i+1];if(Number.isFinite(value)&&rateDayCount){target.rateSum[i]+=value*rateDayCount;target.rateWeight[i]+=rateDayCount;}}}
+        for(const row of activityBucket){const target=targetFor(row[0]);for(let sourceIndex=0;sourceIndex<activityMetricIndexes.length;sourceIndex++){
+          const i=activityMetricIndexes[sourceIndex],value=row[sourceIndex+1];
+          if(DISPATCH_METRICS.has(metrics[i])){
+            if(Number.isFinite(value)){target.average[i]=Math.max(target.average[i],value);target.total[i]=target.average[i];}
+          }else if(RELAY_METRICS.has(metrics[i])&&legacyDayCount&&Number.isFinite(value)){
+            const total=value*legacyDayCount;target.total[i]+=total;target.average[i]+=total/legacyTotalDays;
+          }else if(Number.isFinite(value)){
+            target.average[i]=value;target.total[i]=value;
+          }
+        }}
+      }
+      for(const target of byStation.values())for(let i=0;i<metrics.length;i++)if(isRateIndex(i)){
+        target.average[i]=target.rateWeight[i]?target.rateSum[i]/target.rateWeight[i]:null;
+        target.total[i]=target.average[i];
+      }
+      return byStation;
+    }
+    function percentile(values){const v=values.filter(x=>x>0).sort((a,b)=>a-b);return v.length?Math.max(.01,v[Math.min(v.length-1,Math.floor(v.length*.95))]):1}
+    const catVal=(vals,c)=>{const present=c.idx.map(i=>vals[i]).filter(Number.isFinite);return c.kind==='rate'?(present.length?present.reduce((a,v)=>a+v,0)/present.length:null):present.reduce((a,v)=>a+v,0)};
+    const visualStrength=(value,max)=>max?Math.sqrt(Math.min(1,value/max)):0;
+
+    function renderMatrix(rows,slot){
+      const cfg=MATRIX_CONFIG[matrixSide],H=HD['平日'];
+      if(!H||[cfg.event,cfg.action,cfg.rate].some(i=>i<0)){
+        el('matrixRows').innerHTML='<tr><td colspan="4" style="text-align:center;color:#a33">矩陣需要平日滿借／空還、綁車／解綁車與見車／見位率資料。</td></tr>';
+        return {byStyle:{doubleHigh:0,adjust:0,maintain:0,infrastructure:0,combined:0,missing:rows.length},valid:0,missing:rows.length,total:rows.length};
+      }
+      const counts=Array.from({length:4},()=>[0,0]),missing=0,byStyle={doubleHigh:0,adjust:0,maintain:0,infrastructure:0,combined:0,missing:0};
+      for(const x of rows){
+        const result=matrixClassify(x,slot);
+        if(result.key==='missing'){missing++;byStyle.missing++;continue;}
+        const row=(result.eventHigh?0:2)+(result.rateHigh?0:1),column=result.actionHigh?0:1;
+        counts[row][column]++;byStyle[result.key]++;
+      }
+      const fmt=value=>value.toLocaleString('zh-TW');
+      const labels=[
+        `${cfg.eventLabel}≥${MATRIX_EVENT_T}次｜${cfg.rateLabel}≥${cfg.rateThreshold}%`,
+        `${cfg.eventLabel}≥${MATRIX_EVENT_T}次｜${cfg.rateLabel}<${cfg.rateThreshold}%`,
+        `${cfg.eventLabel}<${MATRIX_EVENT_T}次｜${cfg.rateLabel}≥${cfg.rateThreshold}%`,
+        `${cfg.eventLabel}<${MATRIX_EVENT_T}次｜${cfg.rateLabel}<${cfg.rateThreshold}%`
+      ];
+      const styleKeys=[['doubleHigh','maintain'],['infrastructure','combined'],['maintain','adjust'],['infrastructure','combined']];
+      el('matrixActionHigh').textContent=`${cfg.actionLabel} ≥${MATRIX_ACTION_T}輛`;
+      el('matrixActionLow').textContent=`${cfg.actionLabel} <${MATRIX_ACTION_T}輛`;
+      el('matrixRows').innerHTML=counts.map((bins,row)=>{
+        const total=bins[0]+bins[1];
+        const cells=bins.map((count,column)=>{const style=MATRIX_STYLES[styleKeys[row][column]];return `<td class="${style.css}" data-row="${row}" data-action="${column===0?'high':'low'}" data-count="${count}" title="${style.label}"><span class="matrix-cell-count">${fmt(count)}</span><span class="matrix-cell-action">${style.label}</span></td>`;}).join('');
+        return `<tr><th class="matrix-scenario">${labels[row]}</th>${cells}<td class="matrix-total">${fmt(total)}</td></tr>`;
+      }).join('');
+      const valid=counts.flat().reduce((a,b)=>a+b,0),total=rows.length,check=valid+missing-total;
+      const cities=checked('cityOptions'),districts=checked('districtOptions'),districtTotal=el('districtOptions').querySelectorAll('input[type=checkbox]').length;
+      const cityText=cities.length===1?cities[0]:'雙北',districtText=districts.length===0||districts.length===districtTotal?'全部行政區':districts.length===1?districts[0]:`${districts.length}區`;
+      const threshold=usageThresholdValue();
+      el('matrixScope').textContent=`${activeMonthLabel}・${cityText}・${districtText}・${timeLabel(slot)}・日均>${threshold}・${fmt(total)}站`;
+      const panel=el('matrixPanel');panel.dataset.slot=String(slot);panel.dataset.time=timeLabel(slot);panel.dataset.hour=String(Math.floor(slot/2));panel.dataset.side=matrixSide;panel.dataset.valid=String(valid);panel.dataset.missing=String(missing);panel.dataset.total=String(total);panel.dataset.check=String(check);panel.dataset.threshold=String(threshold);
+      return {byStyle,valid,missing,total,check};
+    }
+
+    function render(){
+      updateLabels();
+      const days=checked('dayOptions'),cities=checked('cityOptions'),districts=checked('districtOptions'),selKeys=checked('metricOptions');
+      const selCats=CATS.filter(c=>selKeys.includes(c.key)),lookup=combinedRows(),slot=+hour.value;
+      const threshold=usageThresholdValue(),useMatrixColors=el('matrixColorToggle').checked;
+      const inFilter=s=>(cities.length===0||cities.includes(s[1]))&&(districts.length===0||districts.includes(s[2]));
+      const rows=stations.map((s,i)=>{const data=lookup.get(i)||{average:blankValues(),total:blankValues()},cat={};for(const c of CATS)cat[c.key]=catVal(c.kind==='relay'?data.total:data.average,c);return{s,i,dailyUsage:dailyUsage[i],capacity:stationCapacity[i],enabledCapacity:enabledStationCapacity[i],vals:data.average,totals:data.total,cat};}).filter(x=>inFilter(x.s)&&Number.isFinite(x.dailyUsage)&&x.dailyUsage>threshold);
+      const matrixSummary=renderMatrix(rows,slot);
+      // 事件與調度保留熱區；率值只用紅黃綠站點圈，避免熱度漸層與達標顏色混淆。
+      for(const c of CATS){if(!useMatrixColors&&selKeys.includes(c.key)){c._max=percentile(rows.map(x=>x.cat[c.key]));c.layer.setLatLngs(c.kind==='rate'?[]:rows.filter(x=>Number.isFinite(x.cat[c.key])&&x.cat[c.key]>0).map(x=>[x.s[3],x.s[4],visualStrength(x.cat[c.key],c._max)]));}else{c._max=0;c.layer.setLatLngs([]);}}
+      neutralMarkers.clearLayers();dispatchMarkers.clearLayers();relayMarkers.clearLayers();rateMarkers.clearLayers();matrixMarkers.clearLayers();
+
+      if(useMatrixColors){
+        for(const x of rows){const result=matrixClassify(x,slot);L.circleMarker([x.s[3],x.s[4]],{pane:'matrixPane',radius:9,color:'#0b3954',weight:1.35,fillColor:result.color,fillOpacity:.9}).bindPopup(popup(x),popupOptions()).addTo(matrixMarkers);}
+        el('summaryNote').textContent='各顏色場站數與左側表格同步，拖動半小時時段會即時重算';
+        const sv=el('summaryValues');sv.innerHTML='';
+        for(const key of ['doubleHigh','adjust','maintain','infrastructure','combined','missing']){const style=MATRIX_STYLES[key],count=matrixSummary.byStyle[key]||0,label=style.summaryLabel||style.label;sv.insertAdjacentHTML('beforeend',`<span class="cat-swatch" style="background:${style.color}"></span><span>${label}</span><span class="v" style="color:${style.color}">${count.toLocaleString()}</span>`);}
+        el('legendTitle').textContent='表格判定顏色';
+        const lr=el('legendRows');lr.innerHTML='';
+        for(const key of ['doubleHigh','adjust','maintain','infrastructure','combined','missing']){const style=MATRIX_STYLES[key],label=style.summaryLabel||style.label;lr.insertAdjacentHTML('beforeend',`<div class="legend-row case"><span class="cat-swatch" style="background:${style.color}"></span><span>${label}</span></div>`);}
+        lr.insertAdjacentHTML('beforeend',`<div class="legend-empty">以平日的${MATRIX_CONFIG[matrixSide].eventLabel}、${MATRIX_CONFIG[matrixSide].actionLabel}與${MATRIX_CONFIG[matrixSide].rateLabel}判定；關閉配色開關即回復原熱區圖標。</div>`);
+        el('selectionText').innerHTML=`<b class="case-summary">${activeMonthLabel}・表格平日判定｜${timeLabel(slot)}</b><br>日均>${threshold}次・${rows.length.toLocaleString()}站`;
+      }else{
+        // 每個已選指標各自保留圖標；見車率為外圈，見位率為較小虛線內圈，顏色代表門檻。
+        for(const x of rows){let visible=false;
+          for(const c of selCats){const value=x.cat[c.key],isRate=c.kind==='rate';if(!isRate&&(!Number.isFinite(value)||value<=0))continue;visible=true;const n=isRate?1:visualStrength(value,c._max),isDispatch=c.kind==='dispatch';
+            const radius=isDispatch?8.5+3.3*n+(c.key.startsWith('調出')?.6:0):isRate?(c.key==='見車率'?10:6):4.2+3.8*n+(c.key==='滿借'?.35:0);
+            const pane=isDispatch?'dispatchPane':isRate?'ratePane':'relayPane',color=isRate?rateColor(c,value):c.ring,fill=isRate?color:c.fill;
+            const dashArray=isRate?(c.key==='見位率'?'3 2':null):(c.key.startsWith('調入')?'4 2':null);
+            const marker=L.circleMarker([x.s[3],x.s[4]],{pane,radius,color,weight:isDispatch?1.2+1.8*n:isRate?(c.key==='見車率'?3:2):.9+1.2*n,fillColor:fill,fillOpacity:isDispatch?.18+.38*n:isRate?(Number.isFinite(value)?(c.key==='見車率'?.28:.68):.12):.28+.58*n,dashArray}).bindPopup(popup(x),popupOptions());
+            marker.addTo(isDispatch?dispatchMarkers:isRate?rateMarkers:relayMarkers);
+          }
+          if(!visible)L.circleMarker([x.s[3],x.s[4]],{pane:'neutralPane',radius:2.5,color:'#708894',weight:1,fillOpacity:.15}).bindPopup(popup(x),popupOptions()).addTo(neutralMarkers);
+        }
+        const hasRate=selCats.some(c=>c.kind==='rate'),hasHeat=selCats.some(c=>c.kind!=='rate');
+        el('summaryNote').textContent=hasRate?(hasHeat?'滿借／空還與調度為半小時；見車／見位率維持每小時':'見車／見位率維持每小時，同小時的 :00／:30 相同'):'滿借／空還與調度為半小時';
+        const sv=el('summaryValues');sv.innerHTML='';
+        if(selCats.length===0)sv.innerHTML='<span style="grid-column:1/4;color:#5b7280">未選擇指標</span>';
+        else for(const c of selCats){const values=rows.map(x=>x.cat[c.key]).filter(Number.isFinite),avg=values.length?values.reduce((a,v)=>a+v,0)/values.length:null,shown=c.kind==='rate'?(Number.isFinite(avg)?`${avg.toFixed(1)}%`:'—'):Math.round(values.reduce((a,v)=>a+v,0)).toLocaleString(),color=c.kind==='rate'?'#17324d':c.ring,fill=c.kind==='rate'?RATE_GRADIENT:c.fill,label=c.kind==='rate'?`${c.key}平均`:c.key;sv.insertAdjacentHTML('beforeend',`<span class="cat-swatch" style="background:${fill}"></span><span>${label}</span><span class="v" style="color:${color}">${shown}</span>`);}
+        el('legendTitle').textContent=hasRate?(hasHeat?'率值狀態／熱區強度':'率值狀態'):'熱區強度';
+        const lr=el('legendRows');lr.innerHTML='';
+        if(selCats.length===0)lr.innerHTML='<div class="legend-empty">未選擇指標</div>';
+        else for(const c of selCats){if(c.kind==='rate'){lr.insertAdjacentHTML('beforeend',`<div class="rate-legend"><div class="rate-legend-title"><span class="rate-legend-symbol">${c.key==='見車率'?'◉':'◌'}</span>${c.key}（${c.shape}）</div><div class="rate-bands"><span class="rate-band" style="background:${RATE_COLORS.bad}">紅 &lt;${c.thresholds.warn}%</span><span class="rate-band" style="background:${RATE_COLORS.warn}">黃 ${c.thresholds.warn}–&lt;${c.thresholds.good}%</span><span class="rate-band" style="background:${RATE_COLORS.good}">綠 ≥${c.thresholds.good}%</span><span class="rate-band missing">灰 無資料</span></div></div>`);}else{const shown=Math.round(c._max||0).toLocaleString();lr.insertAdjacentHTML('beforeend',`<div class="legend-row"><span class="cat-swatch" style="background:${c.fill}"></span><span>${c.key}</span><div class="gradient" style="background:${c.gcss}"></div><span>${shown}</span></div>`);}}
+        el('selectionText').textContent=`${activeMonthLabel}・${days.join('+')||'未選日別'}・${timeLabel(slot)}・日均>${threshold}・${rows.length.toLocaleString()}站`;
+      }
+      el('hourValue').textContent=timeLabel(slot);
+    }
+
+    function popup(x){
+      const rowsHtml=metrics.map((m,i)=>{const relay=m==='滿借'||m==='空還',rate=isRateIndex(i),raw=x.vals[i],value=rate?(Number.isFinite(raw)?`${raw.toFixed(1)}%`:'—'):relay?Math.ceil(Number.isFinite(raw)?raw:0).toLocaleString('zh-TW'):Math.round(Number.isFinite(raw)?raw:0).toLocaleString(),label=relay?`${m}半小時`:m,unit=rate?'':'（輛）',cat=rate?CATS.find(c=>c.key===m):null,color=rate?rateColor(cat,raw):'';return `<span>${label}${unit}</span><span${rate?` class="popup-rate" style="color:${color}"`:''}>${value}</span>`}).join('');
+      const catHtml=CATS.map(c=>{const relay=c.kind==='relay',value=relay?catVal(x.vals,c):(x.cat?.[c.key]??catVal(x.vals,c)),shown=c.kind==='rate'?(Number.isFinite(value)?`${value.toFixed(1)}%`:'—'):relay?`${Math.ceil(Number.isFinite(value)?value:0).toLocaleString('zh-TW')}輛`:`${Math.round(Number.isFinite(value)?value:0).toLocaleString()}輛`,label=relay?`${c.key}半小時`:c.key,style=c.kind==='rate'?` style="color:${rateColor(c,value)};font-weight:700"`:'';return `<span${style}>${label} ${shown}</span>`}).join('　');
+      const capacityValue=Number.isFinite(x.capacity)?`${Math.round(x.capacity).toLocaleString('zh-TW')}格`:'—';
+      const enabledNote=Number.isFinite(x.enabledCapacity)&&x.enabledCapacity!==x.capacity?` <small style="color:#5b7280">（啟用 ${Math.round(x.enabledCapacity).toLocaleString('zh-TW')}）</small>`:'';
+      const capacityHtml=`<div>車位數：<b>${capacityValue}</b>${enabledNote}</div>`;
+      const usageHtml=`<div>場站平日日均用量：<b>${Number.isFinite(x.dailyUsage)?x.dailyUsage.toLocaleString('zh-TW',{maximumFractionDigits:2}):'—'}次</b></div>`;
+      let matrixHtml='';
+      if(el('matrixColorToggle').checked){const result=matrixClassify(x);const textColor=result.key==='maintain'?'#17324d':'#fff';matrixHtml=`<div class="popup-cases">表格判定：<b style="background:${result.color};color:${textColor}">${result.label}</b></div>`;}
+      return `<div class="popup-title">${x.s[0]}</div><div>${x.s[1]}・${x.s[2]}・${timeLabel(+hour.value)}</div>${capacityHtml}${usageHtml}<div class="popup-grid">${rowsHtml}</div><div class="popup-cat">${catHtml}</div>${matrixHtml}`;
+    }
+
+    // ── 站點搜尋：飛到該站並高亮（點擊高亮圈看資訊卡）──
+    function locate(i){const s=stations[i],data=combinedRows().get(i)||{average:blankValues(),total:blankValues()};searchLayer.clearLayers();const marker=L.circleMarker([s[3],s[4]],{pane:'searchPane',radius:15,color:'#ffd166',weight:4,fillOpacity:0,dashArray:'5 3'}).bindPopup(popup({s,i,dailyUsage:dailyUsage[i],capacity:stationCapacity[i],enabledCapacity:enabledStationCapacity[i],vals:data.average,totals:data.total}),popupOptions()).addTo(searchLayer);map.flyTo([s[3],s[4]],17,{duration:.6});setTimeout(()=>marker.openPopup(),650);closeSearch();}
+    function closeSearch(){el('searchList').classList.remove('open');}
+    function runSearch(){const q=el('stationSearch').value.trim(),list=el('searchList');el('searchClear').classList.toggle('show',q.length>0);if(!q){list.innerHTML='';closeSearch();return;}const norm=t=>t.toLowerCase().replace(/[\s()（）]/g,'');const nq=norm(q);const hits=[];for(let i=0;i<stations.length&&hits.length<40;i++){if(norm(stations[i][0]).includes(nq))hits.push(i);}if(hits.length===0){list.innerHTML='<div class="search-empty">找不到符合的站點</div>';list.classList.add('open');return;}list.innerHTML=hits.slice(0,20).map((i,k)=>`<div class="search-item${k===0?' active':''}" data-i="${i}"><b>${stations[i][0]}</b><small>${stations[i][1]}・${stations[i][2]}</small></div>`).join('');list.classList.add('open');list.querySelectorAll('.search-item').forEach(item=>item.onclick=()=>locate(+item.dataset.i));}
+    el('stationSearch').addEventListener('input',runSearch);
+    el('stationSearch').addEventListener('focus',()=>{if(el('stationSearch').value.trim())runSearch();});
+    el('stationSearch').addEventListener('keydown',e=>{const list=el('searchList'),items=[...list.querySelectorAll('.search-item')];if(!items.length)return;let ai=items.findIndex(x=>x.classList.contains('active'));if(e.key==='ArrowDown'){e.preventDefault();ai=Math.min(items.length-1,ai+1);}else if(e.key==='ArrowUp'){e.preventDefault();ai=Math.max(0,ai-1);}else if(e.key==='Enter'){e.preventDefault();const t=items[ai<0?0:ai];if(t)locate(+t.dataset.i);return;}else if(e.key==='Escape'){closeSearch();return;}else return;items.forEach(x=>x.classList.remove('active'));items[ai].classList.add('active');items[ai].scrollIntoView({block:'nearest'});});
+    el('searchClear').onclick=()=>{el('stationSearch').value='';el('searchClear').classList.remove('show');searchLayer.clearLayers();closeSearch();el('stationSearch').focus();};
+    document.addEventListener('click',e=>{if(!e.target.closest('.search-box'))closeSearch();});
+
+    // 指標類別勾選
+    for(const c of CATS){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.value=c.key;input.checked=DEFAULT.has(c.key);input.onchange=render;const sw=document.createElement('span');sw.className='cat-swatch';sw.style.background=c.kind==='rate'?RATE_GRADIENT:c.fill;label.append(input,sw,document.createTextNode(c.key));el('metricOptions').appendChild(label);}
+    optionActions(el('metricOptions'),render);
+
+    document.querySelectorAll('[data-matrix-side]').forEach(button=>button.addEventListener('click',()=>{
+      matrixSide=button.dataset.matrixSide;
+      document.querySelectorAll('[data-matrix-side]').forEach(item=>{const active=item===button;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});
+      render();
+    }));
+    el('matrixCollapse').addEventListener('click',()=>{const panel=el('matrixPanel'),collapsed=panel.classList.toggle('collapsed');el('matrixCollapse').textContent=collapsed?'展開':'收合';el('matrixCollapse').setAttribute('aria-expanded',String(!collapsed));});
+    if(window.matchMedia('(max-width:600px)').matches){el('matrixPanel').classList.add('collapsed');el('matrixCollapse').textContent='展開';el('matrixCollapse').setAttribute('aria-expanded','false');}
+
+    document.querySelectorAll('#dayOptions input,#cityOptions input').forEach(x=>x.addEventListener('change',()=>{if(x.closest('#cityOptions'))refreshDistricts();render()}));
+    hour.addEventListener('input',render);
+    el('usageThreshold').addEventListener('input',render);
+    el('usageThreshold').addEventListener('change',render);
+    el('matrixColorToggle').addEventListener('change',render);
+    el('play').addEventListener('click',()=>{if(timer){stop();return}el('play').textContent='❚❚ 暫停';timer=setInterval(()=>{hour.value=(+hour.value+1)%SLOT_COUNT;render()},900)});
+    function stop(){if(timer){clearInterval(timer);timer=null;el('play').textContent='▶ 播放 48 時段'}}
+
+    refreshDistricts();render();
+    setTimeout(()=>map.invalidateSize(),0);
+    window.addEventListener('load',()=>map.invalidateSize());
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+{
+  "period": "2026-08",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-31",
+  "partial": false,
+  "weekdayDays": 21,
+  "holidayDays": 10,
+  "stations": 3412,
+  "stationsWithWeekdayUsage": 3357,
+  "hourlyRows": {
+    "平日": 80690,
+    "假日": 80662
+  },
+  "halfHourlyRows": {
+    "平日": 109244,
+    "假日": 76280
+  },
+  "rateCells": {
+    "平日": 161040,
+    "假日": 161040
+  },
+  "eventTotals": {
+    "滿借": 192315,
+    "空還": 632553
+  },
+  "sourceHourlyParity": {
+    "eventMismatches": 0,
+    "dispatchMismatches": 0
+  },
+  "sources": {
+    "stationSnapshot": {
+      "file": "station-yb2_2026-09-09.json",
+      "bytes": 6211695,
+      "sha256": "914c220efc3eea2497a00ee1be909adba73d492faff8d2beb737049bc9526248",
+      "templateStations": 3345,
+      "templateStationsWithoutSno": 0,
+      "publicOperatingStations": 3400,
+      "publicStationsAppended": 67
+    },
+    "stationMetadata": {
+      "file": "stations.json",
+      "stations": 3389,
+      "sha256": "19ba590643d16e0acd21e59044b82972013310b04e5418ad5c6468574585f960",
+      "historicalCodeAliases": [
+        {
+          "code": "500103091",
+          "canonicalCode": "500107210"
+        }
+      ]
+    },
+    "usage": {
+      "mode": "station-chunks",
+      "files": [
+        {
+          "file": "2026-08-weekday.json",
+          "rows": 42600,
+          "sha256": "0e581a56f3119f6f616f453e90df9c720436a468efc136ec938fb5fc9ecd22fa"
+        },
+        {
+          "file": "2026-08-holiday.json",
+          "rows": 42600,
+          "sha256": "80ec76868350efc256fc4b992f608b480399b3a822267036c8e04a8b7a8eabf8"
+        },
+        {
+          "file": "2026-08-weekday.json",
+          "rows": 37992,
+          "sha256": "f398a118765d950475bdf6a778104620faacd912b96b6b9a74660079ba194413"
+        },
+        {
+          "file": "2026-08-holiday.json",
+          "rows": 37968,
+          "sha256": "47e5b95d0bb8dca148b5ab76cc24b7b9516bba7258abd69e0aa87818b8775213"
+        }
+      ]
+    },
+    "rates": {
+      "mode": "station-chunks",
+      "files": [
+        {
+          "file": "2026-08-weekday.json",
+          "rows": 42600,
+          "sha256": "0e581a56f3119f6f616f453e90df9c720436a468efc136ec938fb5fc9ecd22fa"
+        },
+        {
+          "file": "2026-08-holiday.json",
+          "rows": 42600,
+          "sha256": "80ec76868350efc256fc4b992f608b480399b3a822267036c8e04a8b7a8eabf8"
+        },
+        {
+          "file": "2026-08-weekday.json",
+          "rows": 37992,
+          "sha256": "f398a118765d950475bdf6a778104620faacd912b96b6b9a74660079ba194413"
+        },
+        {
+          "file": "2026-08-holiday.json",
+          "rows": 37968,
+          "sha256": "47e5b95d0bb8dca148b5ab76cc24b7b9516bba7258abd69e0aa87818b8775213"
+        }
+      ]
+    },
+    "reward": {
+      "files": 52,
+      "directory": "raw_2026-08_09",
+      "sourceRows": 1042302,
+      "duplicateRows": 17436,
+      "uniqueOrders": 1024866,
+      "mobileOrders": 994005,
+      "includedEvents": {
+        "滿借": 192315,
+        "空還": 632553
+      },
+      "ambiguousStationNames": 0,
+      "ambiguousEvents": 0,
+      "ambiguousExamples": [],
+      "denominators": {
+        "平日": 21,
+        "假日": 10
+      }
+    },
+    "dispatch": {
+      "files": [
+        {
+          "file": "vds_task_taipei_2026-08.xlsx",
+          "schema": "staff-info",
+          "counts": {
+            "sourceRows": 144197,
+            "matchedRows": 124845,
+            "調出": 35417,
+            "解綁車": 24177,
+            "調入": 42391,
+            "綁車": 22860
+          },
+          "bytes": 9896114,
+          "sha256": "ad635f7dd61d605d70876af87eec10dd7c9d76a6fe43fdbaaa2d02ee0f078cc6"
+        },
+        {
+          "file": "vds_task_newtaipei_2026-08.xlsx",
+          "schema": "staff-info",
+          "counts": {
+            "sourceRows": 158965,
+            "matchedRows": 141190,
+            "調入": 46723,
+            "調出": 40753,
+            "解綁車": 28064,
+            "綁車": 25650
+          },
+          "bytes": 10976014,
+          "sha256": "fd5995bd2dafb1326930c02fb9fa58680e0b73f8eebfaae0c4262fefd388c930"
+        }
+      ],
+      "unmatchedStations": 0
+    }
+  },
+  "output": {
+    "file": "data\\heatmap-2026-08.js",
+    "bytes": 10502848,
+    "sha256": "0272492f99427e5038523cf2780675bf9a0519f236fb2e910da2dcf8ccfbde01"
+  }
+}
