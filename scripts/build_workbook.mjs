@@ -14,6 +14,7 @@ const daily = workbook.worksheets.add("逐日數據");
 const hourly = workbook.worksheets.add("逐時數據");
 const stations = workbook.worksheets.add("場站期間彙總");
 const focusSummary = workbook.worksheets.add("指定站指標");
+const longxingCompare = workbook.worksheets.add("長興5月比較");
 const focusDaily = workbook.worksheets.add("指定站逐日");
 const focusHourly = workbook.worksheets.add("指定站逐時");
 const routes = workbook.worksheets.add("ZZB路線彙總");
@@ -266,6 +267,46 @@ focusSummary.freezePanes.freezeRows(3);
 focusSummary.freezePanes.freezeColumns(1);
 baseSheet(focusSummary);
 
+// Longxing station comparison, matching the overview's May-versus-current layout.
+const longxing = data.focus_stations.longxing_comparison;
+title(longxingCompare, "A1:D1", `${longxing.name} 5月與9月營運指標比較`, C.charcoal);
+longxingCompare.getRange("A2:D2").values = [["指標", longxing.may_label, longxing.current_label, "與5月差異"]];
+header(longxingCompare.getRange("A2:D2"));
+longxingCompare.getRange(`A3:A${2 + metrics.length}`).values = metrics.map(([label]) => [label]);
+for (let index = 0; index < metrics.length; index++) {
+  const [, key, kind] = metrics[index];
+  const row = index + 3;
+  longxingCompare.getRange(`B${row}:C${row}`).values = [[
+    longxing.may_summary[key] ?? null,
+    longxing.current_summary[key] ?? null,
+  ]];
+  longxingCompare.getRange(`D${row}`).formulas = [[`=IFERROR(C${row}/B${row}-1,"")`]];
+  longxingCompare.getRange(`B${row}:C${row}`).format.numberFormat = kind === "percent" ? "0.00%" : "#,##0";
+  longxingCompare.getRange(`D${row}`).format.numberFormat = "0.00%";
+}
+body(longxingCompare.getRange(`A3:D${2 + metrics.length}`));
+longxingCompare.getRange(`D3:D${2 + metrics.length}`).format.fill = C.paleYellow;
+longxingCompare.getRange(`D3:D${2 + metrics.length}`).conditionalFormats.add("cellIs", { operator: "lessThan", formula: 0, format: { fill: C.paleRed, font: { color: C.red } } });
+longxingCompare.getRange(`D3:D${2 + metrics.length}`).conditionalFormats.add("cellIs", { operator: "greaterThanOrEqualTo", formula: 0, format: { fill: C.paleGreen, font: { color: C.green } } });
+const longxingNotes = [
+  `場站代碼 ${longxing.code}；5月平日為5/4–5/29共${longxing.may_summary.days}日，排除5/1勞動節。`,
+  `9/7–9/17採${longxing.current_summary.active_days}個平日；用量與還量均合併 YouBike 2.0＋2.0E。`,
+  "見車率／見位率採 Report 有效觀測平均；時段口徑同指定站指標。",
+  "差異=(9/7–9/17值÷5月平日值)-1；率值亦為相對變動率。",
+];
+for (let index = 0; index < longxingNotes.length; index++) {
+  const row = 17 + index;
+  longxingCompare.getRange(`A${row}:D${row}`).merge();
+  longxingCompare.getRange(`A${row}`).values = [[longxingNotes[index]]];
+  longxingCompare.getRange(`A${row}:D${row}`).format = { font: { name: FONT, size: 10, color: C.gray }, wrapText: true, verticalAlignment: "center" };
+}
+longxingCompare.getRange("A:A").format.columnWidth = 24;
+longxingCompare.getRange("B:D").format.columnWidth = 20;
+longxingCompare.getRange("3:15").format.rowHeight = 26;
+longxingCompare.getRange("17:20").format.rowHeight = 26;
+longxingCompare.freezePanes.freezeRows(2);
+baseSheet(longxingCompare);
+
 title(focusDaily, "A1:U1", "指定四站逐日營運明細（9/7–9/17平日）", C.teal);
 focusDaily.getRange("A2:U2").values = [[
   "日期", "星期", "場站代碼", "場站名稱", "2.0用量", "2.0E用量", "用量合計", "2.0還量", "2.0E還量", "還量合計",
@@ -394,7 +435,7 @@ const noteRows = [
   ["見車／見位率", "Report data_analysis.daily_empty_full；排除<0或>1；指定日期、站點與時段內的有效觀測平均。"],
   ["時段", "6–24=06–23；7–9=07、08、09；11–13=11、12、13；16–20=16–20；21–00=21–23。"],
   ["更新期間", "9/1–9/17與9/7–9/17均採完整平日；最右欄另列9/17單日。"],
-  ["指定四站", "另列臺大男七舍前、臺大男一舍前、臺大男六舍前、基隆長興路口東側；期間為9/7–9/17共9個平日。"],
+  ["指定四站", "另列臺大男七舍前、臺大男一舍前、臺大男六舍前、基隆長興路口東側；期間為9/7–9/17共9個平日；長興另以5/4–5/29共20個平日比較。"],
   ["ZZB篩選", "車輛號碼以ZZB開頭；只納入工作狀態=調出/調入、車種=2.0/2.0E、數量>0。"],
   ["ZZB路線重建", data.meta.route_rule],
   ["線型", "調出與調入兩端站碼皆以500119開頭為實線；任一端非500119開頭為虛線。"],
@@ -446,6 +487,7 @@ for (const spec of [
   ["月報總覽", "A1:I21", 25, 12],
   ["逐日數據", `A1:R${Math.min(dailyEnd, 38)}`, 40, 20],
   ["指定站指標", "A1:E18", 22, 8],
+  ["長興5月比較", "A1:D20", 24, 8],
   ["指定站逐日", `A1:U${focusDailyEnd}`, 42, 24],
   ["ZZB路線彙總", `A1:V${Math.min(routeEnd, 28)}`, 30, 24],
   ["資料口徑", "A1:F25", 32, 8],
@@ -462,6 +504,7 @@ for (const [sheetName, range, filename, scale] of [
   ["月報總覽", "A1:I21", "overview.png", 1.2],
   ["逐日數據", `A1:R${Math.min(dailyEnd, 26)}`, "daily.png", 0.9],
   ["指定站指標", "A1:E18", "focus_summary.png", 1.2],
+  ["長興5月比較", "A1:D20", "longxing_compare.png", 1.2],
   ["指定站逐日", `A1:U${Math.min(focusDailyEnd, 22)}`, "focus_daily.png", 0.9],
   ["指定站逐時", `A1:N${Math.min(focusHourlyEnd, 28)}`, "focus_hourly.png", 0.9],
   ["ZZB路線彙總", `A1:V${Math.min(routeEnd, 22)}`, "routes.png", 0.8],
