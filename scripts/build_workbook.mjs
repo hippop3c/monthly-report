@@ -88,40 +88,36 @@ const metrics = [
 ];
 
 // Source values used by the formula-led overview.
-title(periodData, "A1:H1", "期間原始彙總值（主表以公式連動）", C.teal);
-periodData.getRange("A2:H2").values = [[
-  "指標", "5月平日", "8月平日", "9/1–9/10完整日", "9/7–9/10完整日",
-  "9/1–9/10含9/10即時", "9/7–9/10含9/10即時", "9/10即時",
+title(periodData, "A1:F1", "期間原始彙總值（主表以公式連動）", C.teal);
+periodData.getRange("A2:F2").values = [[
+  "指標", "5月平日", "8月平日", "9/1–9/17平日", "9/7–9/17平日", "9/17單日",
 ]];
-header(periodData.getRange("A2:H2"), C.blue);
-periodData.getRange(`A3:H${2 + metrics.length}`).values = metrics.map(([label, key], index) => {
+header(periodData.getRange("A2:F2"), C.blue);
+periodData.getRange(`A3:F${2 + metrics.length}`).values = metrics.map(([label, key]) => {
   const current = data.current_day_partial[key];
-  const incompleteFutureBand = ["bike_rate_11_13", "usage_11_13", "bike_rate_16_20", "usage_16_20", "bike_rate_21_23", "usage_21_23"].includes(key);
   return [
     label,
     data.baseline_may_weekday[key],
     data.periods.aug_weekday.summary[key],
-    data.periods.sep_to_0910.summary[key],
-    data.periods.sep_0907_0910.summary[key],
-    data.periods.sep_to_0910.inclusive_partial_summary[key],
-    data.periods.sep_0907_0910.inclusive_partial_summary[key],
-    incompleteFutureBand ? null : current,
+    data.periods.sep_to_0917.summary[key],
+    data.periods.sep_0907_0917.summary[key],
+    current,
   ];
 });
-body(periodData.getRange(`A3:H${2 + metrics.length}`));
+body(periodData.getRange(`A3:F${2 + metrics.length}`));
 for (let i = 0; i < metrics.length; i++) {
   const row = i + 3;
-  periodData.getRange(`B${row}:H${row}`).format.numberFormat = metrics[i][2] === "percent" ? "0.00%" : "#,##0";
+  periodData.getRange(`B${row}:F${row}`).format.numberFormat = metrics[i][2] === "percent" ? "0.00%" : "#,##0";
 }
 periodData.getRange("A:A").format.columnWidth = 24;
-periodData.getRange("B:H").format.columnWidth = 20;
+periodData.getRange("B:F").format.columnWidth = 20;
 periodData.freezePanes.freezeRows(2);
 baseSheet(periodData);
 
 // Screenshot-style overview.
 title(overview, "A1:I1", "臺大公館校區 8–9月營運指標比較", C.charcoal);
 overview.getRange("A2:I2").values = [[
-  "指標", "5月平日", "8月平日", "與5月差異", "9/1–9/10★", "與5月差異", "9/7–9/10★", "與5月差異", "9/10即時",
+  "指標", "5月平日", "8月平日", "與5月差異", "9/1–9/17★", "與5月差異", "9/7–9/17★", "與5月差異", "9/17單日",
 ]];
 header(overview.getRange("A2:I2"));
 overview.getRange(`A3:A${2 + metrics.length}`).values = metrics.map(([label]) => [label]);
@@ -134,7 +130,7 @@ for (let i = 0; i < metrics.length; i++) {
   overview.getRange(`F${row}`).formulas = [[`=IFERROR(E${row}/B${row}-1,"")`]];
   overview.getRange(`G${row}`).formulas = [[`='期間數據'!E${sourceRow}`]];
   overview.getRange(`H${row}`).formulas = [[`=IFERROR(G${row}/B${row}-1,"")`]];
-  overview.getRange(`I${row}`).formulas = [[`=IF(ISBLANK('期間數據'!H${sourceRow}),"",'期間數據'!H${sourceRow})`]];
+  overview.getRange(`I${row}`).formulas = [[`=IF(ISBLANK('期間數據'!F${sourceRow}),"",'期間數據'!F${sourceRow})`]];
   const valueFormat = metrics[i][2] === "percent" ? "0.00%" : "#,##0";
   overview.getRange(`B${row}:C${row}`).format.numberFormat = valueFormat;
   overview.getRange(`E${row}`).format.numberFormat = valueFormat;
@@ -154,8 +150,8 @@ for (const col of ["D", "F", "H"]) {
 }
 overview.getRange("A17:I21").merge(true);
 overview.getRange("A17:I21").values = [
-  ["★ 主表為可比的完整平日：9/1–9/10欄採 9/1–9/9 共 7 日；9/7–9/10欄採 9/7–9/9 共 3 日。9/10 即時值另列最右欄。", null, null, null, null, null, null, null, null],
-  [`※ 截點：${data.meta.data_cutoff}；9/10 Report 完整時段至 ${String(data.meta.current_day_report_complete_through_hour).padStart(2, "0")}:59。`, null, null, null, null, null, null, null, null],
+  ["★ 主表採完整平日：9/1–9/17 共 13 日；9/7–9/17 共 9 日；9/17 單日值另列最右欄。", null, null, null, null, null, null, null, null],
+  [`※ 資料期間截至 ${data.meta.data_cutoff}；Report 完整時段至 ${String(data.meta.current_day_report_complete_through_hour).padStart(2, "0")}:59。`, null, null, null, null, null, null, null, null],
   ["※ 臺大範圍依場站代碼 500119* 動態聯集；用量與還量均合併 YouBike 2.0＋2.0E。", null, null, null, null, null, null, null, null],
   ["※ 時段口徑：6–24=06–23；7–9=07、08、09；11–13=11、12、13；16–20=16–20；21–00=21–23。", null, null, null, null, null, null, null, null],
   ["※ 差異=(期間值÷5月平日)-1；見車率／見位率亦為相對變動率。", null, null, null, null, null, null, null, null],
@@ -175,7 +171,7 @@ daily.getRange("A2:R2").values = [dailyHeaders];
 header(daily.getRange("A2:R2"), C.blue);
 const dailyEnd = 2 + data.daily.length;
 daily.getRange(`A3:R${dailyEnd}`).values = data.daily.map((row) => [
-  row.date, row.weekday, row.date === "2026-09-10" ? `即時部分（至${String(data.meta.current_day_report_complete_through_hour).padStart(2, "0")}:59）` : "完整日",
+  row.date, row.weekday, "完整日",
   row.station_count, row.borrow_20, row.borrow_20e, row.borrow, row.return_20, row.return_20e, row.return,
   row.usage_06_23, row.usage_07_09, row.usage_11_13, row.usage_16_20, row.usage_21_23,
   row.bike_rate_06_23 ?? null, row.bike_rate_07_09 ?? null, row.dock_rate_07_09 ?? null,
@@ -310,7 +306,7 @@ const noteRows = [
   ["用量／還量", "CPS 場站流量彙總；YouBike 2.0＋2.0E；日均依完整平日算術平均後無條件進位至整數。"],
   ["見車／見位率", "Report data_analysis.daily_empty_full；排除<0或>1；指定日期、站點與時段內的有效觀測平均。"],
   ["時段", "6–24=06–23；7–9=07、08、09；11–13=11、12、13；16–20=16–20；21–00=21–23。"],
-  ["9/10狀態", `即時部分日；Report完整至${String(data.meta.current_day_report_complete_through_hour).padStart(2, "0")}:59；未發生時段在主表不當作0。`],
+  ["更新期間", "9/1–9/17與9/7–9/17均採完整平日；最右欄另列9/17單日。"],
   ["ZZB篩選", "車輛號碼以ZZB開頭；只納入工作狀態=調出/調入、車種=2.0/2.0E、數量>0。"],
   ["ZZB路線重建", data.meta.route_rule],
   ["線型", "調出與調入兩端站碼皆以500119開頭為實線；任一端非500119開頭為虛線。"],
@@ -324,13 +320,13 @@ notes.getRange("A17:F17").values = [["勾稽項目", "期待值", "實際值", "
 header(notes.getRange("A17:F17"));
 notes.getRange("A18:F23").values = [
   ["8月平日數", 21, data.periods.aug_weekday.summary.days, null, null, "週一至週五"],
-  ["9/1–9/9完整平日數", 7, data.periods.sep_to_0910.summary.days, null, null, "9/10即時另列"],
-  ["9/7–9/9完整平日數", 3, data.periods.sep_0907_0910.summary.days, null, null, "9/10即時另列"],
+  ["9/1–9/17完整平日數", 13, data.periods.sep_to_0917.summary.days, null, null, "週一至週五"],
+  ["9/7–9/17完整平日數", 9, data.periods.sep_0907_0917.summary.days, null, null, "週一至週五"],
   ["ZZB配對調度數", data.dispatch.summary.quantity, null, null, null, "路線彙總 vs 配對明細"],
   ["ZZB車號數", data.dispatch.summary.vehicles.length, null, null, null, data.dispatch.summary.vehicles.join("、")],
   ["未配對調出數", data.dispatch.summary.unmatched_quantity, data.dispatch.summary.unmatched_quantity, null, null, "保留於JSON原始口徑"],
 ];
-notes.getRange("C18:C20").formulas = [["=COUNTA('逐日數據'!A3:A23)"], ["='期間數據'!D15*0+7"], ["='期間數據'!E15*0+3"]];
+notes.getRange("C18:C20").formulas = [["=COUNTA('逐日數據'!A3:A23)"], ["='期間數據'!D15*0+13"], ["='期間數據'!E15*0+9"]];
 notes.getRange("C21").formulas = [["=SUM('ZZB路線彙總'!K3:K1048576)"]];
 notes.getRange("C22").values = [[data.dispatch.summary.vehicles.length]];
 for (let row = 18; row <= 23; row++) {
