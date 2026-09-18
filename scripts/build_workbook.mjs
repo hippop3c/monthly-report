@@ -13,6 +13,9 @@ const periodData = workbook.worksheets.add("期間數據");
 const daily = workbook.worksheets.add("逐日數據");
 const hourly = workbook.worksheets.add("逐時數據");
 const stations = workbook.worksheets.add("場站期間彙總");
+const focusSummary = workbook.worksheets.add("指定站指標");
+const focusDaily = workbook.worksheets.add("指定站逐日");
+const focusHourly = workbook.worksheets.add("指定站逐時");
 const routes = workbook.worksheets.add("ZZB路線彙總");
 const segments = workbook.worksheets.add("ZZB配對明細");
 const events = workbook.worksheets.add("ZZB原始調度");
@@ -230,6 +233,90 @@ stations.freezePanes.freezeColumns(3);
 stations.tables.add(`A2:K${stationEnd}`, true, "StationRollup").style = "TableStyleMedium2";
 baseSheet(stations);
 
+// Four specifically requested stations, using the same 9/7–9/17 weekday metric definitions.
+const focusRows = data.focus_stations.summary;
+title(focusSummary, "A1:E1", "指定四站 9/7–9/17 平日營運指標", C.teal);
+focusSummary.getRange("A2:E2").values = [["指標", ...focusRows.map((row) => row.name)]];
+header(focusSummary.getRange("A2:E2"), C.blue);
+focusSummary.getRange("A3:E3").values = [["場站代碼", ...focusRows.map((row) => row.code)]];
+focusSummary.getRange("A3:E3").format = {
+  fill: C.paleBlue,
+  font: { name: FONT, size: 10, bold: true, color: C.dark },
+  horizontalAlignment: "center",
+  verticalAlignment: "center",
+  borders: { preset: "all", style: "thin", color: C.grid },
+};
+focusSummary.getRange(`A4:A${3 + metrics.length}`).values = metrics.map(([label]) => [label]);
+for (let index = 0; index < metrics.length; index++) {
+  const [, key, kind] = metrics[index];
+  const row = index + 4;
+  focusSummary.getRange(`B${row}:E${row}`).values = [focusRows.map((station) => station[key] ?? null)];
+  focusSummary.getRange(`B${row}:E${row}`).format.numberFormat = kind === "percent" ? "0.00%" : "#,##0";
+}
+body(focusSummary.getRange(`A4:E${3 + metrics.length}`));
+focusSummary.getRange("A18:E18").merge();
+focusSummary.getRange("A18").values = [["口徑：9/7–9/17 共 9 個平日；用量與還量合併 YouBike 2.0＋2.0E；見車／見位率採 Report 有效觀測平均。"]];
+focusSummary.getRange("A18:E18").format = { font: { name: FONT, size: 10, color: C.gray }, wrapText: true };
+focusSummary.getRange("A:A").format.columnWidth = 24;
+focusSummary.getRange("B:E").format.columnWidth = 25;
+focusSummary.getRange("2:3").format.rowHeight = 32;
+focusSummary.getRange("4:16").format.rowHeight = 24;
+focusSummary.getRange("18:18").format.rowHeight = 34;
+focusSummary.freezePanes.freezeRows(3);
+focusSummary.freezePanes.freezeColumns(1);
+baseSheet(focusSummary);
+
+title(focusDaily, "A1:U1", "指定四站逐日營運明細（9/7–9/17平日）", C.teal);
+focusDaily.getRange("A2:U2").values = [[
+  "日期", "星期", "場站代碼", "場站名稱", "2.0用量", "2.0E用量", "用量合計", "2.0還量", "2.0E還量", "還量合計",
+  "6–24用量", "7–9用量", "11–13用量", "16–20用量", "21–00用量", "6–24見車率", "7–9見車率", "11–13見車率", "16–20見車率", "21–00見車率", "7–9見位率",
+]];
+header(focusDaily.getRange("A2:U2"), C.blue);
+const focusDailyEnd = 2 + data.focus_stations.daily.length;
+focusDaily.getRange(`A3:U${focusDailyEnd}`).values = data.focus_stations.daily.map((row) => [
+  row.date, row.weekday, row.code, row.name,
+  row.borrow_20, row.borrow_20e, row.borrow, row.return_20, row.return_20e, row.return,
+  row.usage_06_23, row.usage_07_09, row.usage_11_13, row.usage_16_20, row.usage_21_23,
+  row.bike_rate_06_23 ?? null, row.bike_rate_07_09 ?? null, row.bike_rate_11_13 ?? null,
+  row.bike_rate_16_20 ?? null, row.bike_rate_21_23 ?? null, row.dock_rate_07_09 ?? null,
+]);
+body(focusDaily.getRange(`A3:U${focusDailyEnd}`));
+focusDaily.getRange(`E3:O${focusDailyEnd}`).format.numberFormat = "#,##0";
+focusDaily.getRange(`P3:U${focusDailyEnd}`).format.numberFormat = "0.00%";
+focusDaily.getRange("A:B").format.columnWidth = 12;
+focusDaily.getRange("C:C").format.columnWidth = 16;
+focusDaily.getRange("D:D").format.columnWidth = 28;
+focusDaily.getRange("E:U").format.columnWidth = 14;
+focusDaily.freezePanes.freezeRows(2);
+focusDaily.freezePanes.freezeColumns(4);
+focusDaily.tables.add(`A2:U${focusDailyEnd}`, true, "FocusStationDaily").style = "TableStyleMedium2";
+baseSheet(focusDaily);
+
+title(focusHourly, "A1:N1", "指定四站逐日逐時營運明細（9/7–9/17平日）", C.teal);
+focusHourly.getRange("A2:N2").values = [[
+  "日期", "星期", "場站代碼", "場站名稱", "小時", "2.0用量", "2.0E用量", "用量合計",
+  "2.0還量", "2.0E還量", "還量合計", "見車率", "見位率", "時段",
+]];
+header(focusHourly.getRange("A2:N2"), C.blue);
+const focusHourlyEnd = 2 + data.focus_stations.hourly.length;
+focusHourly.getRange(`A3:N${focusHourlyEnd}`).values = data.focus_stations.hourly.map((row) => [
+  row.date, row.weekday, row.code, row.name, `${String(row.hour).padStart(2, "0")}:00`,
+  row.borrow_20, row.borrow_20e, row.borrow, row.return_20, row.return_20e, row.return,
+  row.bike_rate ?? null, row.dock_rate ?? null,
+  row.hour <= 5 ? "00–05" : row.hour <= 9 ? "06–09" : row.hour <= 13 ? "10–13" : row.hour <= 17 ? "14–17" : row.hour <= 21 ? "18–21" : "22–23",
+]);
+body(focusHourly.getRange(`A3:N${focusHourlyEnd}`));
+focusHourly.getRange(`F3:K${focusHourlyEnd}`).format.numberFormat = "#,##0";
+focusHourly.getRange(`L3:M${focusHourlyEnd}`).format.numberFormat = "0.00%";
+focusHourly.getRange("A:B").format.columnWidth = 12;
+focusHourly.getRange("C:C").format.columnWidth = 16;
+focusHourly.getRange("D:D").format.columnWidth = 28;
+focusHourly.getRange("E:N").format.columnWidth = 14;
+focusHourly.freezePanes.freezeRows(2);
+focusHourly.freezePanes.freezeColumns(4);
+focusHourly.tables.add(`A2:N${focusHourlyEnd}`, true, "FocusStationHourly").style = "TableStyleMedium2";
+baseSheet(focusHourly);
+
 // ZZB route summary.
 title(routes, "A1:V1", "ZZB 調度路線彙總（2026/9/1–9/10）", C.charcoal);
 const routeHeaders = ["日期", "調出小時", "時段", "調出站代碼", "調出站名稱", "調入站代碼", "調入站名稱", "線型", "車輛數", "車號", "調度數量", "2.0", "2.0E", "路線段數", "調出緯度", "調出經度", "調入緯度", "調入經度", "兩端500119", "虛線理由", "調出行政區", "調入行政區"];
@@ -307,6 +394,7 @@ const noteRows = [
   ["見車／見位率", "Report data_analysis.daily_empty_full；排除<0或>1；指定日期、站點與時段內的有效觀測平均。"],
   ["時段", "6–24=06–23；7–9=07、08、09；11–13=11、12、13；16–20=16–20；21–00=21–23。"],
   ["更新期間", "9/1–9/17與9/7–9/17均採完整平日；最右欄另列9/17單日。"],
+  ["指定四站", "另列臺大男七舍前、臺大男一舍前、臺大男六舍前、基隆長興路口東側；期間為9/7–9/17共9個平日。"],
   ["ZZB篩選", "車輛號碼以ZZB開頭；只納入工作狀態=調出/調入、車種=2.0/2.0E、數量>0。"],
   ["ZZB路線重建", data.meta.route_rule],
   ["線型", "調出與調入兩端站碼皆以500119開頭為實線；任一端非500119開頭為虛線。"],
@@ -318,29 +406,32 @@ notes.getRange(`A4:A${3 + noteRows.length}`).format.font = { name: FONT, size: 1
 
 notes.getRange("A17:F17").values = [["勾稽項目", "期待值", "實際值", "差異", "結果", "備註"]];
 header(notes.getRange("A17:F17"));
-notes.getRange("A18:F23").values = [
+notes.getRange("A18:F25").values = [
   ["8月平日數", 21, data.periods.aug_weekday.summary.days, null, null, "週一至週五"],
   ["9/1–9/17完整平日數", 13, data.periods.sep_to_0917.summary.days, null, null, "週一至週五"],
   ["9/7–9/17完整平日數", 9, data.periods.sep_0907_0917.summary.days, null, null, "週一至週五"],
   ["ZZB配對調度數", data.dispatch.summary.quantity, null, null, null, "路線彙總 vs 配對明細"],
   ["ZZB車號數", data.dispatch.summary.vehicles.length, null, null, null, data.dispatch.summary.vehicles.join("、")],
   ["未配對調出數", data.dispatch.summary.unmatched_quantity, data.dispatch.summary.unmatched_quantity, null, null, "保留於JSON原始口徑"],
+  ["指定站數", 4, null, null, null, "使用者指定四站"],
+  ["指定站逐日列數", 36, null, null, null, "4站×9平日"],
 ];
 notes.getRange("C18:C20").formulas = [["=COUNTA('逐日數據'!A3:A23)"], ["='期間數據'!D15*0+13"], ["='期間數據'!E15*0+9"]];
 notes.getRange("C21").formulas = [["=SUM('ZZB路線彙總'!K3:K1048576)"]];
 notes.getRange("C22").values = [[data.dispatch.summary.vehicles.length]];
-for (let row = 18; row <= 23; row++) {
+notes.getRange("C24:C25").formulas = [["=COUNTA('指定站指標'!B3:E3)"], [`=COUNTA('指定站逐日'!A3:A${focusDailyEnd})`]];
+for (let row = 18; row <= 25; row++) {
   notes.getRange(`D${row}`).formulas = [[`=C${row}-B${row}`]];
   notes.getRange(`E${row}`).formulas = [[`=IF(D${row}=0,"一致","不一致")`]];
 }
-body(notes.getRange("A18:F23"));
-notes.getRange("B18:D23").format.numberFormat = "#,##0";
-notes.getRange("E18:E23").conditionalFormats.add("containsText", { text: "不一致", format: { fill: C.paleRed, font: { color: C.red, bold: true } } });
+body(notes.getRange("A18:F25"));
+notes.getRange("B18:D25").format.numberFormat = "#,##0";
+notes.getRange("E18:E25").conditionalFormats.add("containsText", { text: "不一致", format: { fill: C.paleRed, font: { color: C.red, bold: true } } });
 notes.getRange("A:A").format.columnWidth = 26;
 notes.getRange("B:B").format.columnWidth = 76;
 notes.getRange("C:E").format.columnWidth = 16;
 notes.getRange("F:F").format.columnWidth = 45;
-notes.getRange("4:14").format.rowHeight = 36;
+notes.getRange("4:15").format.rowHeight = 36;
 notes.freezePanes.freezeRows(3);
 baseSheet(notes);
 
@@ -354,8 +445,10 @@ const inspection = [];
 for (const spec of [
   ["月報總覽", "A1:I21", 25, 12],
   ["逐日數據", `A1:R${Math.min(dailyEnd, 38)}`, 40, 20],
+  ["指定站指標", "A1:E18", 22, 8],
+  ["指定站逐日", `A1:U${focusDailyEnd}`, 42, 24],
   ["ZZB路線彙總", `A1:V${Math.min(routeEnd, 28)}`, 30, 24],
-  ["資料口徑", "A1:F23", 30, 8],
+  ["資料口徑", "A1:F25", 32, 8],
 ]) {
   const [sheetName, range, tableMaxRows, tableMaxCols] = spec;
   const result = await saved.inspect({ kind: "table", range: `${sheetName}!${range}`, include: "values,formulas", tableMaxRows, tableMaxCols, maxChars: 22000 });
@@ -368,8 +461,11 @@ await fs.writeFile(`${qaDir}/inspect.ndjson`, inspection.join("\n"), "utf8");
 for (const [sheetName, range, filename, scale] of [
   ["月報總覽", "A1:I21", "overview.png", 1.2],
   ["逐日數據", `A1:R${Math.min(dailyEnd, 26)}`, "daily.png", 0.9],
+  ["指定站指標", "A1:E18", "focus_summary.png", 1.2],
+  ["指定站逐日", `A1:U${Math.min(focusDailyEnd, 22)}`, "focus_daily.png", 0.9],
+  ["指定站逐時", `A1:N${Math.min(focusHourlyEnd, 28)}`, "focus_hourly.png", 0.9],
   ["ZZB路線彙總", `A1:V${Math.min(routeEnd, 22)}`, "routes.png", 0.8],
-  ["資料口徑", "A1:F23", "notes.png", 1.0],
+  ["資料口徑", "A1:F25", "notes.png", 1.0],
 ]) {
   const preview = await saved.render({ sheetName, range, scale, format: "png" });
   await fs.writeFile(`${qaDir}/${filename}`, new Uint8Array(await preview.arrayBuffer()));
@@ -379,5 +475,5 @@ console.log(JSON.stringify({
   outputPath,
   sheets: saved.worksheets.items.map((sheet) => sheet.name),
   formulaErrorScan: errors.ndjson,
-  rowCounts: { daily: data.daily.length, hourly: data.hourly.length, stations: data.stations.length, routes: data.dispatch.routes.length, segments: data.dispatch.segments.length, events: data.dispatch.events.length },
+  rowCounts: { daily: data.daily.length, hourly: data.hourly.length, stations: data.stations.length, focusDaily: data.focus_stations.daily.length, focusHourly: data.focus_stations.hourly.length, routes: data.dispatch.routes.length, segments: data.dispatch.segments.length, events: data.dispatch.events.length },
 }, null, 2));
