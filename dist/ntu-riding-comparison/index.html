@@ -8,7 +8,7 @@
   <title>臺大校內外騎乘年度比較地圖</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="app.css?v=20261027-1">
+  <link rel="stylesheet" href="app.css?v=20261027-2">
 </head>
 <body>
   <header class="topbar">
@@ -32,7 +32,24 @@
       <label><input type="checkbox" name="month" value="09"><i class="dot sep"></i>9月</label>
       <label><input type="checkbox" name="month" value="10"><i class="dot oct"></i>10月</label>
     </fieldset>
-    <label class="control"><span>時段</span><select id="bandSelect"></select></label>
+    <div class="control time-control">
+      <span>時段（可複選）</span>
+      <details id="timePicker" class="time-picker">
+        <summary id="timeSummary">全日（24時段）</summary>
+        <div id="timeMenu" class="time-menu">
+          <div class="time-presets" aria-label="快速選取時段">
+            <button type="button" data-hour-preset="all">全日</button>
+            <button type="button" data-hour-preset="6-24">6–24時</button>
+            <button type="button" data-hour-preset="7-9">7–9時</button>
+            <button type="button" data-hour-preset="11-13">11–13時</button>
+            <button type="button" data-hour-preset="16-20">16–20時</button>
+            <button type="button" data-hour-preset="21-00">21–00時</button>
+            <button type="button" data-hour-preset="clear">清除</button>
+          </div>
+          <div id="hourOptions" class="hour-options" aria-label="逐時複選"></div>
+        </div>
+      </details>
+    </div>
     <label class="control"><span>方向</span><select id="categorySelect"><option value="all">全部方向</option></select></label>
     <label class="control search"><span>搜尋站點</span><input id="stationSearch" type="search" placeholder="站名或代碼"></label>
     <label class="control min"><span>最低日均 <b id="minLabel">1.0</b></span><input id="minAverage" type="range" min="0" max="10" step="0.25" value="1"></label>
@@ -47,7 +64,8 @@
         <strong>圖例</strong>
         <p><i class="legend-line may"></i>5月 <i class="legend-line sep"></i>9月 <i class="legend-line oct"></i>10月</p>
         <p><span class="line-sample dashed"></span>2025　<span class="line-sample solid"></span>2026</p>
-        <small>線寬依「期間總量 ÷ 全部樣本日」計算；同一路線兩年會略微錯開，方便比較。</small>
+        <p><i class="endpoint-swatch origin"></i>起點 <i class="endpoint-swatch destination"></i>迄點 <i class="endpoint-swatch both"></i>同時為起迄點</p>
+        <small>線寬依「所選時段總量 ÷ 全部樣本日」計算；同一路線兩年會略微錯開，方便比較。</small>
       </div>
       <div id="mapMessage" class="map-message hidden"></div>
     </section>
@@ -73,7 +91,7 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="data/manifest.js?v=20261027-1"></script>
-  <script src="app.js?v=20261027-1"></script>
+  <script src="data/manifest.js?v=20261027-2"></script>
+  <script src="app.js?v=20261027-2"></script>
 </body>
 </html>
