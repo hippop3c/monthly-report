@@ -1,86 +1,223 @@
 (() => {
   "use strict";
+
   const manifest = window.NTU_RIDING_MANIFEST;
+  const trackingManifest = window.NTU_VEHICLE_TRACKING_MANIFEST || null;
   const COLORS = {"05":"#2563eb","09":"#16a34a","10":"#f97316"};
   const ORIGIN_COLOR = "#06b6d4";
   const DESTINATION_COLOR = "#e11d48";
+  const RIDING_COLOR = "#f59e0b";
+  const TRACE_COLOR = "#334155";
   const fmt = new Intl.NumberFormat("zh-TW", {maximumFractionDigits:1});
-  const state = {layers:[], markers:[], loadToken:0, selectedRoute:null};
+  const state = {mode:"route", layers:[], markers:[], loadToken:0};
   const $ = (id) => document.getElementById(id);
-  const safe = (value) => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+  const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[character]);
   const norm = (value) => String(value ?? "").normalize("NFKC").replace(/臺/g,"台").replace(/\s+/g,"").toLowerCase();
-  const stations = manifest.stations.map((row,index) => ({index,code:row[0],name:row[1],className:row[2],district:row[3],lat:Number(row[4]),lng:Number(row[5]),search:norm(`${row[0]} ${row[1]} ${row[2]} ${row[3]}`)}));
-  const periodMeta = Object.fromEntries(manifest.periods.map(row => [row.period,row]));
+  const coordinate = (value) => value===null||value===undefined||value==="" ? Number.NaN : Number(value);
+  const stationObjects = (rows) => rows.map((row,index) => ({
+    index,
+    code:String(row[0]),
+    name:row[1],
+    className:row[2],
+    district:row[3],
+    lat:coordinate(row[4]),
+    lng:coordinate(row[5]),
+    search:norm(`${row[0]} ${row[1]} ${row[2]} ${row[3]}`)
+  }));
+  const stations = stationObjects(manifest.stations);
+  const trackingStations = stationObjects(trackingManifest?.stations||manifest.stations);
+  const periodMeta = Object.fromEntries(manifest.periods.map((row) => [row.period,row]));
   window.NTU_RIDING_SHARDS = window.NTU_RIDING_SHARDS || {};
+  window.NTU_VEHICLE_TRACKING_SHARDS = window.NTU_VEHICLE_TRACKING_SHARDS || {};
+
   const map = L.map("map", {preferCanvas:true, zoomControl:true}).setView([25.0183,121.5395],14);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
-  map.createPane("routePane");map.getPane("routePane").style.zIndex="430";
-  map.createPane("endpointPane");map.getPane("endpointPane").style.zIndex="460";map.getPane("endpointPane").style.pointerEvents="none";
-  map.createPane("searchPane");map.getPane("searchPane").style.zIndex="480";
+  map.createPane("routePane");
+  map.getPane("routePane").style.zIndex="430";
+  map.createPane("endpointPane");
+  map.getPane("endpointPane").style.zIndex="460";
+  map.getPane("endpointPane").style.pointerEvents="none";
+  map.createPane("trackingPane");
+  map.getPane("trackingPane").style.zIndex="475";
+  map.createPane("searchPane");
+  map.getPane("searchPane").style.zIndex="490";
   const renderer = L.canvas({padding:0.6,tolerance:7,pane:"routePane"});
+  const trackingRenderer = L.canvas({padding:0.6,tolerance:7,pane:"trackingPane"});
   const searchRenderer = L.canvas({padding:0.3,pane:"searchPane"});
 
   const PRESETS = {
     all:[...Array(24).keys()],
-    "6-24":[...Array(18).keys()].map(value=>value+6),
+    "6-24":[...Array(18).keys()].map((value) => value+6),
     "7-9":[7,8,9],
     "11-13":[11,12,13],
     "16-20":[16,17,18,19,20],
     "21-00":[21,22,23],
     clear:[]
   };
-  $("hourOptions").innerHTML=manifest.hours.map((hour,index)=>{
+
+  $("hourOptions").innerHTML=manifest.hours.map((_hour,index) => {
     const clock=String(index).padStart(2,"0");
     return `<label><input type="checkbox" name="timeHour" value="${index}" checked><span>${clock}:00–${clock}:59</span></label>`;
   }).join("");
   manifest.categories.forEach((category,index) => $("categorySelect").add(new Option(category, String(index))));
 
-  function selectedValues(name){return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(node => node.value);}
-  function selectedHours(){return selectedValues("timeHour").map(Number).sort((a,b)=>a-b);}
+  function selectedValues(name){
+    return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((node) => node.value);
+  }
+
+  function selectedHours(){
+    return selectedValues("timeHour").map(Number).sort((a,b) => a-b);
+  }
+
   function compactHourLabel(hours){
     if(hours.length===24)return "全日（24時段）";
     if(!hours.length)return "未選時段";
-    const ranges=[];let start=hours[0],end=hours[0];
-    hours.slice(1).forEach(hour=>{if(hour===end+1){end=hour;}else{ranges.push([start,end]);start=hour;end=hour;}});ranges.push([start,end]);
-    return ranges.map(([from,to])=>from===to?`${String(from).padStart(2,"0")}:00–${String(to).padStart(2,"0")}:59`:`${String(from).padStart(2,"0")}:00–${String(to).padStart(2,"0")}:59`).join("、");
+    const ranges=[];
+    let start=hours[0],end=hours[0];
+    hours.slice(1).forEach((hour) => {
+      if(hour===end+1){end=hour;}
+      else{ranges.push([start,end]);start=hour;end=hour;}
+    });
+    ranges.push([start,end]);
+    return ranges.map(([from,to]) => from===to
+      ? `${String(from).padStart(2,"0")}:00–${String(to).padStart(2,"0")}:59`
+      : `${String(from).padStart(2,"0")}:00–${String(to).padStart(2,"0")}:59`
+    ).join("、");
   }
-  function updateTimeSummary(){const hours=selectedHours();const label=compactHourLabel(hours);$("timeSummary").textContent=hours.length>8&&hours.length<24?`${hours.length}個時段` : label;$("timeSummary").title=label;}
-  function setHours(hours){const chosen=new Set(hours);document.querySelectorAll('input[name="timeHour"]').forEach(node=>{node.checked=chosen.has(Number(node.value));});updateTimeSummary();}
-  function positionTimeMenu(){if(!$("timePicker").open)return;const rect=$("timePicker").getBoundingClientRect(),menu=$("timeMenu");const width=Math.min(590,window.innerWidth-24);menu.style.width=`${width}px`;menu.style.left=`${Math.max(12,Math.min(rect.left,window.innerWidth-width-12))}px`;menu.style.top=`${rect.bottom+6}px`;}
-  function injectScript(src){return new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=src;script.onload=()=>resolve();script.onerror=()=>reject(new Error(`無法載入 ${src}`));document.head.appendChild(script);});}
-  async function ensurePeriod(period){if(window.NTU_RIDING_SHARDS[period])return;await injectScript(`data/${manifest.shards[period]}?v=20261027-2`);}
-  function clearMap(){state.layers.forEach(layer=>map.removeLayer(layer));state.markers.forEach(layer=>map.removeLayer(layer));state.layers=[];state.markers=[];}
+
+  function updateTimeSummary(){
+    const hours=selectedHours();
+    const label=compactHourLabel(hours);
+    $("timeSummary").textContent=hours.length>8&&hours.length<24 ? `${hours.length}個時段` : label;
+    $("timeSummary").title=label;
+  }
+
+  function setHours(hours){
+    const chosen=new Set(hours);
+    document.querySelectorAll('input[name="timeHour"]').forEach((node) => {node.checked=chosen.has(Number(node.value));});
+    updateTimeSummary();
+  }
+
+  function positionTimeMenu(){
+    if(!$("timePicker").open)return;
+    const rect=$("timePicker").getBoundingClientRect();
+    const menu=$("timeMenu");
+    const width=Math.min(590,window.innerWidth-24);
+    menu.style.width=`${width}px`;
+    menu.style.left=`${Math.max(12,Math.min(rect.left,window.innerWidth-width-12))}px`;
+    menu.style.top=`${rect.bottom+6}px`;
+  }
+
+  function injectScript(src){
+    return new Promise((resolve,reject) => {
+      const script=document.createElement("script");
+      script.src=src;
+      script.onload=() => resolve();
+      script.onerror=() => reject(new Error(`無法載入 ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensurePeriod(period){
+    if(window.NTU_RIDING_SHARDS[period])return;
+    await injectScript(`data/${manifest.shards[period]}?v=20261028-1`);
+  }
+
+  async function ensureTrackingDay(day){
+    if(window.NTU_VEHICLE_TRACKING_SHARDS[day])return;
+    const descriptor=trackingManifest?.days?.[day];
+    if(!descriptor)throw new Error("所選日期沒有車號追蹤資料");
+    await injectScript(`data/tracking/${descriptor.file}?v=20261028-1`);
+  }
+
+  function clearMap(){
+    state.layers.forEach((layer) => map.removeLayer(layer));
+    state.markers.forEach((layer) => map.removeLayer(layer));
+    state.layers=[];
+    state.markers=[];
+  }
+
+  function startLoading(label){
+    $("loadingText").textContent=label;
+    $("loading").classList.remove("hidden");
+    $("mapMessage").classList.add("hidden");
+  }
+
+  function stopLoading(){
+    $("loading").classList.add("hidden");
+  }
+
+  function showMapMessage(message){
+    $("mapMessage").textContent=message;
+    $("mapMessage").classList.remove("hidden");
+  }
+
   function offsetPair(a,b,year){
     const dx=b.lng-a.lng,dy=b.lat-a.lat,length=Math.hypot(dx,dy)||1;
     const sign=year===2025?-1:1,amount=0.000018*sign;
     const ox=(-dy/length)*amount,oy=(dx/length)*amount;
     return [[a.lat+oy,a.lng+ox],[b.lat+oy,b.lng+ox]];
   }
-  function currentTimeLabel(){return compactHourLabel(selectedHours());}
+
+  function currentTimeLabel(){
+    return compactHourLabel(selectedHours());
+  }
+
   function routeObject(period,raw,hours){
     const origin=stations[raw[0]],destination=stations[raw[1]],categoryIndex=raw[2],sampleDays=periodMeta[period].sample_days;
     const hourOffset=3+manifest.bands.length*4;
-    const total=hours.reduce((sum,hour)=>sum+Number(raw[hourOffset+hour]||0),0),average=total/sampleDays;
+    const total=hours.reduce((sum,hour) => sum+Number(raw[hourOffset+hour]||0),0),average=total/sampleDays;
     return {period,year:Number(period.slice(0,4)),month:period.slice(5),origin,destination,categoryIndex,category:manifest.categories[categoryIndex],total,average,sampleDays};
   }
-  function popupHtml(route){return `<div class="popup-title">${safe(route.origin.name)} → ${safe(route.destination.name)}</div><div class="popup-meta">${route.period}｜${safe(route.category)}｜${safe(currentTimeLabel())}</div><div class="popup-value">日均 ${fmt.format(route.average)} 次</div><div>所選時段總量 ${fmt.format(route.total)} 次｜樣本 ${route.sampleDays} 日</div>`;}
-  function rowHtml(route,index){return `<tr data-index="${index}"><td><span class="period" style="color:${COLORS[route.month]}">${route.period}</span><span class="direction">${safe(route.category)}</span></td><td class="route-name">${safe(route.origin.name)}<br><small>→ ${safe(route.destination.name)}</small></td><td><b>${fmt.format(route.average)}</b></td></tr>`;}
+
+  function popupHtml(route){
+    return `<div class="popup-title">${safe(route.origin.name)} → ${safe(route.destination.name)}</div><div class="popup-meta">${route.period}｜${safe(route.category)}｜${safe(currentTimeLabel())}</div><div class="popup-value">日均 ${fmt.format(route.average)} 次</div><div>所選時段總量 ${fmt.format(route.total)} 次｜樣本 ${route.sampleDays} 日</div>`;
+  }
+
+  function rowHtml(route,index){
+    return `<tr data-index="${index}"><td><span class="period" style="color:${COLORS[route.month]}">${route.period}</span><span class="direction">${safe(route.category)}</span></td><td class="route-name">${safe(route.origin.name)}<br><small>→ ${safe(route.destination.name)}</small></td><td><b>${fmt.format(route.average)}</b></td></tr>`;
+  }
+
   function renderEndpointMarkers(routes){
     const roles=new Map();
-    routes.forEach(route=>{roles.set(route.origin.index,(roles.get(route.origin.index)||0)|1);roles.set(route.destination.index,(roles.get(route.destination.index)||0)|2);});
-    roles.forEach((mask,index)=>{const station=stations[index];if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return;const roleClass=mask===3?"both":mask===1?"origin":"destination";const marker=L.marker([station.lat,station.lng],{pane:"endpointPane",interactive:false,keyboard:false,icon:L.divIcon({className:"endpoint-icon",html:`<span class="endpoint-pin ${roleClass}"></span>`,iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);state.markers.push(marker);});
+    routes.forEach((route) => {
+      roles.set(route.origin.index,(roles.get(route.origin.index)||0)|1);
+      roles.set(route.destination.index,(roles.get(route.destination.index)||0)|2);
+    });
+    roles.forEach((mask,index) => {
+      const station=stations[index];
+      if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return;
+      const roleClass=mask===3?"both":mask===1?"origin":"destination";
+      const marker=L.marker([station.lat,station.lng],{
+        pane:"endpointPane",
+        interactive:false,
+        keyboard:false,
+        icon:L.divIcon({className:"endpoint-icon",html:`<span class="endpoint-pin ${roleClass}"></span>`,iconSize:[16,16],iconAnchor:[8,8]})
+      }).addTo(map);
+      state.markers.push(marker);
+    });
   }
-  async function refresh(){
-    const token=++state.loadToken;$("loading").classList.remove("hidden");$("mapMessage").classList.add("hidden");
+
+  async function refreshRoutes(){
+    if(state.mode!=="route")return;
+    const token=++state.loadToken;
+    startLoading("載入路線資料…");
     const years=selectedValues("year"),months=selectedValues("month"),hours=selectedHours();
-    const periods=years.flatMap(year=>months.map(month=>`${year}-${month}`)).filter(key=>manifest.shards[key]);
-    if(!periods.length){clearMap();showEmpty("請至少選擇一個年度與月份");return;}
-    if(!hours.length){clearMap();showEmpty("請至少選擇一個時段");return;}
-    try{await Promise.all(periods.map(ensurePeriod));}catch(error){if(token===state.loadToken)showEmpty(error.message);return;}
-    if(token!==state.loadToken)return;
-    const category=$("categorySelect").value,query=norm($("stationSearch").value),minimum=Number($("minAverage").value);
+    const periods=years.flatMap((year) => months.map((month) => `${year}-${month}`)).filter((key) => manifest.shards[key]);
+    if(!periods.length){showRouteEmpty("請至少選擇一個年度與月份");return;}
+    if(!hours.length){showRouteEmpty("請至少選擇一個時段");return;}
+    try{
+      await Promise.all(periods.map(ensurePeriod));
+    }catch(error){
+      if(token===state.loadToken)showRouteEmpty(error.message);
+      return;
+    }
+    if(token!==state.loadToken||state.mode!=="route")return;
+    const category=$("categorySelect").value;
+    const query=norm($("stationSearch").value);
+    const minimum=Number($("minAverage").value);
     const routes=[];
-    periods.forEach(period=>window.NTU_RIDING_SHARDS[period].routes.forEach(raw=>{
+    periods.forEach((period) => window.NTU_RIDING_SHARDS[period].routes.forEach((raw) => {
       const route=routeObject(period,raw,hours);
       if(route.average<minimum)return;
       if(category!=="all"&&route.categoryIndex!==Number(category))return;
@@ -88,40 +225,330 @@
       if(!Number.isFinite(route.origin.lat)||!Number.isFinite(route.destination.lat))return;
       routes.push(route);
     }));
-    routes.sort((a,b)=>b.average-a.average);
+    routes.sort((a,b) => b.average-a.average);
     clearMap();
-    routes.forEach(route=>{
+    routes.forEach((route) => {
       const coords=offsetPair(route.origin,route.destination,route.year);
-      const layer=L.polyline(coords,{renderer,color:COLORS[route.month],weight:Math.max(1.2,Math.min(9,1+Math.sqrt(route.average)*0.9)),opacity:.65,dashArray:route.year===2025?"10 7":null,lineCap:"round"}).addTo(map);
-      layer.bindPopup(popupHtml(route));layer.on("mouseover",()=>{layer.bringToFront();layer.setStyle({opacity:1,weight:Math.min(11,layer.options.weight+2)});});layer.on("mouseout",()=>layer.setStyle({opacity:.65,weight:Math.max(1.2,Math.min(9,1+Math.sqrt(route.average)*0.9))}));
-      route.layer=layer;state.layers.push(layer);
+      const baseWeight=Math.max(1.2,Math.min(9,1+Math.sqrt(route.average)*0.9));
+      const layer=L.polyline(coords,{renderer,color:COLORS[route.month],weight:baseWeight,opacity:.65,dashArray:route.year===2025?"10 7":null,lineCap:"round"}).addTo(map);
+      layer.bindPopup(popupHtml(route));
+      layer.on("mouseover",() => {layer.bringToFront();layer.setStyle({opacity:1,weight:Math.min(11,baseWeight+2)});});
+      layer.on("mouseout",() => layer.setStyle({opacity:.65,weight:baseWeight}));
+      route.layer=layer;
+      state.layers.push(layer);
     });
     renderEndpointMarkers(routes);
     if(query){
-      const matched=stations.filter(station=>station.search.includes(query)&&Number.isFinite(station.lat));
-      matched.forEach(station=>{const marker=L.circleMarker([station.lat,station.lng],{renderer:searchRenderer,pane:"searchPane",radius:10,color:"#facc15",weight:4,fillOpacity:0}).addTo(map).bindTooltip(`${safe(station.name)} (${safe(station.code)})`);state.markers.push(marker);});
+      stations.filter((station) => station.search.includes(query)&&Number.isFinite(station.lat)).forEach((station) => {
+        const marker=L.circleMarker([station.lat,station.lng],{renderer:searchRenderer,pane:"searchPane",radius:10,color:"#facc15",weight:4,fillOpacity:0}).addTo(map).bindTooltip(`${safe(station.name)} (${safe(station.code)})`);
+        state.markers.push(marker);
+      });
     }
-    renderSide(routes,periods);
-    $("loading").classList.add("hidden");
+    renderRouteSide(routes,periods);
+    stopLoading();
   }
-  function renderSide(routes,periods){
-    $("routeCount").textContent=fmt.format(routes.length);$("routeKpi").textContent=fmt.format(routes.length);$("averageKpi").textContent=fmt.format(routes.reduce((sum,row)=>sum+row.average,0));
-    $("sampleKpi").textContent=periods.map(period=>`${period}:${periodMeta[period].sample_days}`).join("｜");
+
+  function renderRouteSide(routes,periods){
+    $("routeCount").textContent=fmt.format(routes.length);
+    $("routeKpi").textContent=fmt.format(routes.length);
+    $("averageKpi").textContent=fmt.format(routes.reduce((sum,row) => sum+row.average,0));
+    $("sampleKpi").textContent=periods.map((period) => `${period}:${periodMeta[period].sample_days}`).join("｜");
     $("statusText").textContent=`${currentTimeLabel()}｜最低日均 ${Number($("minAverage").value).toFixed(1)} 次`;
     $("routeRows").innerHTML=routes.slice(0,80).map(rowHtml).join("")||'<tr><td colspan="3">沒有符合條件的路線</td></tr>';
-    [...$("routeRows").querySelectorAll("tr[data-index]")].forEach(row=>row.addEventListener("click",()=>{const route=routes[Number(row.dataset.index)];map.fitBounds(route.layer.getBounds(),{padding:[80,80],maxZoom:16});route.layer.openPopup();}));
+    [...$("routeRows").querySelectorAll("tr[data-index]")].forEach((row) => row.addEventListener("click",() => {
+      const route=routes[Number(row.dataset.index)];
+      map.fitBounds(route.layer.getBounds(),{padding:[80,80],maxZoom:16});
+      route.layer.openPopup();
+    }));
   }
-  function showEmpty(message){clearMap();$("loading").classList.add("hidden");$("mapMessage").textContent=message;$("mapMessage").classList.remove("hidden");$("routeRows").innerHTML="";$("routeCount").textContent="0";$("routeKpi").textContent="0";$("averageKpi").textContent="0";$("sampleKpi").textContent="—";}
-  function debounce(fn,delay=180){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),delay);};}
-  const debouncedRefresh=debounce(refresh,100);
-  document.querySelectorAll('input[name="year"],input[name="month"],#categorySelect').forEach(node=>node.addEventListener("change",refresh));
-  document.querySelectorAll('input[name="timeHour"]').forEach(node=>node.addEventListener("change",()=>{updateTimeSummary();debouncedRefresh();}));
-  document.querySelectorAll("[data-hour-preset]").forEach(button=>button.addEventListener("click",()=>{setHours(PRESETS[button.dataset.hourPreset]||[]);debouncedRefresh();}));
-  $("timePicker").addEventListener("toggle",positionTimeMenu);window.addEventListener("resize",positionTimeMenu);document.querySelector(".controls").addEventListener("scroll",positionTimeMenu);
-  document.addEventListener("click",event=>{if($("timePicker").open&&!$("timePicker").contains(event.target))$("timePicker").open=false;});
-  $("minAverage").addEventListener("input",()=>{$("minLabel").textContent=Number($("minAverage").value).toFixed(1);debouncedRefresh();});
-  $("stationSearch").addEventListener("input",debounce(refresh,240));
-  $("resetButton").addEventListener("click",()=>{document.querySelectorAll('input[name="year"]').forEach(node=>node.checked=true);document.querySelectorAll('input[name="month"]').forEach(node=>node.checked=node.value==="05");setHours(PRESETS.all);$("categorySelect").value="all";$("stationSearch").value="";$("minAverage").value="1";$("minLabel").textContent="1.0";$("timePicker").open=false;map.setView([25.0183,121.5395],14);refresh();});
+
+  function showRouteEmpty(message){
+    clearMap();
+    stopLoading();
+    showMapMessage(message);
+    $("routeRows").innerHTML="";
+    $("routeCount").textContent="0";
+    $("routeKpi").textContent="0";
+    $("averageKpi").textContent="0";
+    $("sampleKpi").textContent="—";
+  }
+
+  function minuteLabel(minute){
+    if(!Number.isFinite(minute))return "—";
+    const dayOffset=Math.floor(minute/1440);
+    const normalized=((minute%1440)+1440)%1440;
+    const hour=String(Math.floor(normalized/60)).padStart(2,"0");
+    const mins=String(normalized%60).padStart(2,"0");
+    return `${dayOffset>0?`翌日${dayOffset>1?dayOffset:""} `:""}${hour}:${mins}`;
+  }
+
+  function cutoffMinute(){
+    const [hour,minute]=String($("trackingCutoff").value||"23:59").split(":").map(Number);
+    return Math.max(0,Math.min(1439,(Number.isFinite(hour)?hour:23)*60+(Number.isFinite(minute)?minute:59)));
+  }
+
+  function trackingRecords(shard,cutoff){
+    const latest=new Map();
+    shard.r.forEach((raw) => {
+      const vehicle=String(shard.v[raw[0]]??"");
+      const borrowMinute=Number(raw[2]);
+      if(!vehicle||!Number.isFinite(borrowMinute)||borrowMinute>cutoff)return;
+      const record={
+        vehicle,
+        bikeType:String(shard.t[raw[1]]??"未標示"),
+        borrowMinute,
+        returnMinute:Number(raw[3]),
+        origin:trackingStations[raw[4]],
+        destination:trackingStations[raw[5]]
+      };
+      if(!record.origin||!record.destination)return;
+      const prior=latest.get(vehicle);
+      if(!prior||record.borrowMinute>prior.borrowMinute||(record.borrowMinute===prior.borrowMinute&&record.returnMinute>prior.returnMinute))latest.set(vehicle,record);
+    });
+    return [...latest.values()].map((record) => ({...record,returned:record.returnMinute<=cutoff}));
+  }
+
+  function trackingPopup(record,day){
+    const destination=record.returned?`${safe(record.destination.name)} (${safe(record.destination.code)})`:'<span class="riding-status">騎乘中，尚未還車</span>';
+    return `<div class="popup-title">車號 ${safe(record.vehicle)}</div><div class="popup-meta">${safe(day)}｜${safe(record.bikeType)}</div><div>${minuteLabel(record.borrowMinute)}　${safe(record.origin.name)}</div><div>→ ${record.returned?minuteLabel(record.returnMinute):"截至所選時間"}　${destination}</div>`;
+  }
+
+  function trackingRowHtml(record,index){
+    const destination=record.returned
+      ? `${safe(record.destination.name)}<small> (${safe(record.destination.code)})</small>`
+      : '<span class="riding-status">騎乘中</span>';
+    return `<tr data-index="${index}"><td><span class="vehicle-id">${safe(record.vehicle)}</span><span class="vehicle-meta">${safe(record.bikeType)}｜${minuteLabel(record.borrowMinute)}${record.returned?`–${minuteLabel(record.returnMinute)}`:" 起"}</span></td><td class="route-name">${safe(record.origin.name)}<br><small>→ ${destination}</small></td></tr>`;
+  }
+
+  function addAggregateMarker(station,count,color,role,label,vehicles){
+    if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return null;
+    const radius=Math.max(6,Math.min(24,5+Math.sqrt(count)*1.6));
+    const isOrigin=role==="origin";
+    const marker=L.circleMarker([station.lat,station.lng],{
+      renderer:trackingRenderer,
+      pane:"trackingPane",
+      radius:isOrigin?radius+3:radius,
+      color,
+      weight:isOrigin?3:2,
+      fillColor:color,
+      fillOpacity:isOrigin?.12:.68
+    }).addTo(map);
+    const vehicleList=vehicles.slice(0,12).map(safe).join("、");
+    marker.bindPopup(`<div class="popup-title">${safe(station.name)}</div><div class="popup-meta">${safe(station.code)}｜${safe(label)}</div><div class="popup-value">${fmt.format(count)} 輛</div>${vehicleList?`<div>${vehicleList}${vehicles.length>12?"…":""}</div>`:""}`);
+    state.markers.push(marker);
+    return marker;
+  }
+
+  function renderTrackingAggregate(records){
+    const origins=new Map(),destinations=new Map(),riding=new Map();
+    const collect=(target,station,vehicle) => {
+      const row=target.get(station.index)||{station,vehicles:[]};
+      row.vehicles.push(vehicle);
+      target.set(station.index,row);
+    };
+    records.forEach((record) => {
+      collect(origins,record.origin,record.vehicle);
+      if(record.returned)collect(destinations,record.destination,record.vehicle);
+      else collect(riding,record.origin,record.vehicle);
+    });
+    origins.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,ORIGIN_COLOR,"origin","臺大借出站",row.vehicles));
+    destinations.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,DESTINATION_COLOR,"destination","截至時間最後還車點",row.vehicles));
+    riding.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,RIDING_COLOR,"riding","截至時間仍在騎乘",row.vehicles));
+  }
+
+  function renderTrackingRoutes(records,day){
+    records.forEach((record) => {
+      let line=null;
+      const hasOrigin=Number.isFinite(record.origin.lat)&&Number.isFinite(record.origin.lng);
+      const hasDestination=Number.isFinite(record.destination.lat)&&Number.isFinite(record.destination.lng);
+      if(record.returned&&hasOrigin&&hasDestination){
+        line=L.polyline([[record.origin.lat,record.origin.lng],[record.destination.lat,record.destination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:TRACE_COLOR,weight:4,opacity:.76,lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record,day));
+        state.layers.push(line);
+      }
+      let origin=null;
+      if(hasOrigin){
+        origin=L.circleMarker([record.origin.lat,record.origin.lng],{renderer:trackingRenderer,pane:"trackingPane",radius:7,color:"#fff",weight:2,fillColor:record.returned?ORIGIN_COLOR:RIDING_COLOR,fillOpacity:1}).addTo(map).bindPopup(trackingPopup(record,day));
+        state.markers.push(origin);
+      }
+      if(record.returned&&hasDestination){
+        const destination=L.circleMarker([record.destination.lat,record.destination.lng],{renderer:trackingRenderer,pane:"trackingPane",radius:7,color:"#fff",weight:2,fillColor:DESTINATION_COLOR,fillOpacity:1}).addTo(map).bindPopup(trackingPopup(record,day));
+        state.markers.push(destination);
+      }
+      record.line=line;
+      record.originMarker=origin;
+    });
+  }
+
+  function fitTracking(records){
+    const points=[];
+    records.forEach((record) => {
+      if(Number.isFinite(record.origin.lat)&&Number.isFinite(record.origin.lng))points.push([record.origin.lat,record.origin.lng]);
+      if(record.returned&&Number.isFinite(record.destination.lat)&&Number.isFinite(record.destination.lng))points.push([record.destination.lat,record.destination.lng]);
+    });
+    if(points.length>1)map.fitBounds(L.latLngBounds(points),{padding:[45,45],maxZoom:15});
+    else if(points.length===1)map.setView(points[0],15);
+    else map.setView([25.0183,121.5395],14);
+  }
+
+  async function refreshTracking(){
+    if(state.mode!=="tracking")return;
+    if(!trackingManifest){showTrackingEmpty("車號追蹤資料尚未完成載入");return;}
+    const day=$("trackingDate").value;
+    if(!day){showTrackingEmpty("請選擇日期");return;}
+    const token=++state.loadToken;
+    startLoading("載入車號追蹤資料…");
+    try{
+      await ensureTrackingDay(day);
+    }catch(error){
+      if(token===state.loadToken)showTrackingEmpty(error.message);
+      return;
+    }
+    if(token!==state.loadToken||state.mode!=="tracking")return;
+    const shard=window.NTU_VEHICLE_TRACKING_SHARDS[day];
+    const cutoff=cutoffMinute();
+    const vehicleQuery=norm($("vehicleSearch").value);
+    const stationQuery=norm($("trackingStationSearch").value);
+    let records=trackingRecords(shard,cutoff).filter((record) => {
+      if(vehicleQuery&&!norm(record.vehicle).includes(vehicleQuery))return false;
+      if(stationQuery&&!record.origin.search.includes(stationQuery)&&!(record.returned&&record.destination.search.includes(stationQuery)))return false;
+      return true;
+    });
+    records.sort((a,b) => b.borrowMinute-a.borrowMinute||a.vehicle.localeCompare(b.vehicle,"zh-Hant"));
+    clearMap();
+    if(vehicleQuery)renderTrackingRoutes(records,day);
+    else renderTrackingAggregate(records);
+    fitTracking(records);
+    renderTrackingSide(records,day,cutoff,Boolean(vehicleQuery));
+    stopLoading();
+    if(!records.length)showMapMessage("沒有符合目前條件的臺大出發車輛");
+  }
+
+  function renderTrackingSide(records,day,cutoff,isVehicleSearch){
+    const returned=records.filter((record) => record.returned).length;
+    const riding=records.length-returned;
+    $("vehicleCount").textContent=fmt.format(records.length);
+    $("vehicleKpi").textContent=fmt.format(records.length);
+    $("returnedKpi").textContent=fmt.format(returned);
+    $("ridingKpi").textContent=fmt.format(riding);
+    $("trackingStatusText").textContent=`${day}｜截至 ${minuteLabel(cutoff)}｜${isVehicleSearch?"個別路線":"站點彙總"}`;
+    $("trackingRows").innerHTML=records.slice(0,250).map(trackingRowHtml).join("")||'<tr><td colspan="2">沒有符合條件的車輛</td></tr>';
+    [...$("trackingRows").querySelectorAll("tr[data-index]")].forEach((row) => row.addEventListener("click",() => {
+      const record=records[Number(row.dataset.index)];
+      if(record.line){map.fitBounds(record.line.getBounds(),{padding:[80,80],maxZoom:17});record.line.openPopup();}
+      else if(record.originMarker){map.setView([record.origin.lat,record.origin.lng],16);record.originMarker.openPopup();}
+    }));
+  }
+
+  function showTrackingEmpty(message){
+    clearMap();
+    stopLoading();
+    showMapMessage(message);
+    $("trackingRows").innerHTML="";
+    $("vehicleCount").textContent="0";
+    $("vehicleKpi").textContent="0";
+    $("returnedKpi").textContent="0";
+    $("ridingKpi").textContent="0";
+    $("trackingStatusText").textContent=message;
+  }
+
+  function trackingPeriod(){
+    return trackingManifest?.periods?.find((row) => row.period===$("trackingPeriod").value);
+  }
+
+  function updateTrackingDates(preferred){
+    const period=trackingPeriod();
+    const dates=period?.dates||[];
+    $("trackingDate").innerHTML="";
+    dates.forEach((day) => $("trackingDate").add(new Option(day,day)));
+    $("trackingDate").value=dates.includes(preferred)?preferred:(dates.at(-1)||"");
+  }
+
+  function initializeTrackingControls(){
+    if(!trackingManifest){
+      $("trackingModeButton").title="車號追蹤資料尚未完成載入";
+      return;
+    }
+    trackingManifest.periods.forEach((period) => {
+      const label=`${period.period}（${period.sample_days}日）`;
+      $("trackingPeriod").add(new Option(label,period.period));
+    });
+    const latest=trackingManifest.periods.at(-1);
+    $("trackingPeriod").value=latest?.period||"";
+    updateTrackingDates(latest?.dates?.at(-1));
+  }
+
+  function setMode(mode){
+    if(mode===state.mode&&mode!=="tracking")return;
+    state.mode=mode;
+    state.loadToken+=1;
+    clearMap();
+    stopLoading();
+    $("mapMessage").classList.add("hidden");
+    const tracking=mode==="tracking";
+    $("routeModeButton").classList.toggle("active",!tracking);
+    $("trackingModeButton").classList.toggle("active",tracking);
+    $("routeModeButton").setAttribute("aria-selected",String(!tracking));
+    $("trackingModeButton").setAttribute("aria-selected",String(tracking));
+    $("routeControls").classList.toggle("hidden",tracking);
+    $("trackingControls").classList.toggle("hidden",!tracking);
+    $("routeSummaryPanel").classList.toggle("hidden",tracking);
+    $("trackingSummaryPanel").classList.toggle("hidden",!tracking);
+    $("routeLegend").classList.toggle("hidden",tracking);
+    $("trackingLegend").classList.toggle("hidden",!tracking);
+    setTimeout(() => map.invalidateSize(),0);
+    if(tracking)refreshTracking();
+    else refreshRoutes();
+  }
+
+  function debounce(fn,delay=180){
+    let timer;
+    return (...args) => {clearTimeout(timer);timer=setTimeout(() => fn(...args),delay);};
+  }
+
+  const debouncedRouteRefresh=debounce(refreshRoutes,100);
+  document.querySelectorAll('input[name="year"],input[name="month"],#categorySelect').forEach((node) => node.addEventListener("change",refreshRoutes));
+  document.querySelectorAll('input[name="timeHour"]').forEach((node) => node.addEventListener("change",() => {updateTimeSummary();debouncedRouteRefresh();}));
+  document.querySelectorAll("[data-hour-preset]").forEach((button) => button.addEventListener("click",() => {setHours(PRESETS[button.dataset.hourPreset]||[]);debouncedRouteRefresh();}));
+  $("timePicker").addEventListener("toggle",positionTimeMenu);
+  window.addEventListener("resize",positionTimeMenu);
+  $("routeControls").addEventListener("scroll",positionTimeMenu);
+  document.addEventListener("click",(event) => {if($("timePicker").open&&!$("timePicker").contains(event.target))$("timePicker").open=false;});
+  $("minAverage").addEventListener("input",() => {$("minLabel").textContent=Number($("minAverage").value).toFixed(1);debouncedRouteRefresh();});
+  $("stationSearch").addEventListener("input",debounce(refreshRoutes,240));
+  $("resetButton").addEventListener("click",() => {
+    document.querySelectorAll('input[name="year"]').forEach((node) => node.checked=true);
+    document.querySelectorAll('input[name="month"]').forEach((node) => node.checked=node.value==="05");
+    setHours(PRESETS.all);
+    $("categorySelect").value="all";
+    $("stationSearch").value="";
+    $("minAverage").value="1";
+    $("minLabel").textContent="1.0";
+    $("timePicker").open=false;
+    map.setView([25.0183,121.5395],14);
+    refreshRoutes();
+  });
+
+  $("routeModeButton").addEventListener("click",() => setMode("route"));
+  $("trackingModeButton").addEventListener("click",() => setMode("tracking"));
+  $("trackingPeriod").addEventListener("change",() => {updateTrackingDates();refreshTracking();});
+  $("trackingDate").addEventListener("change",refreshTracking);
+  $("trackingCutoff").addEventListener("change",refreshTracking);
+  $("vehicleSearch").addEventListener("input",debounce(refreshTracking,240));
+  $("trackingStationSearch").addEventListener("input",debounce(refreshTracking,240));
+  $("trackingResetButton").addEventListener("click",() => {
+    if(trackingManifest){
+      const latest=trackingManifest.periods.at(-1);
+      $("trackingPeriod").value=latest?.period||"";
+      updateTrackingDates(latest?.dates?.at(-1));
+    }
+    $("trackingCutoff").value="23:59";
+    $("vehicleSearch").value="";
+    $("trackingStationSearch").value="";
+    map.setView([25.0183,121.5395],14);
+    refreshTracking();
+  });
+
   updateTimeSummary();
-  refresh();
+  initializeTrackingControls();
+  refreshRoutes();
 })();

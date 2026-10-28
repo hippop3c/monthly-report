@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#17385f">
-  <meta name="description" content="臺大校內外騎乘路線年度比較：2025虛線、2026實線，同月份使用相同顏色。">
-  <title>臺大校內外騎乘年度比較地圖</title>
+  <meta name="description" content="臺大校內外騎乘年度比較與臺大出發車號最後還車點追蹤。">
+  <title>臺大校內外騎乘比較與車號追蹤地圖</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="app.css?v=20261027-2">
+  <link rel="stylesheet" href="app.css?v=20261028-1">
 </head>
 <body>
   <header class="topbar">
@@ -17,10 +17,16 @@
       <h1>臺大校內外騎乘年度比較</h1>
       <p class="subtitle">平日且臺北當日用量超過 20 萬次｜同月同色、2025 虛線、2026 實線</p>
     </div>
-    <a class="download" href="../files/臺大校內外騎乘_2025與2026年5月9月10月比較.xlsx">下載 Excel</a>
+    <div class="header-actions">
+      <div class="mode-switch" role="tablist" aria-label="地圖模式">
+        <button id="routeModeButton" class="active" type="button" role="tab" aria-selected="true">路線比較</button>
+        <button id="trackingModeButton" type="button" role="tab" aria-selected="false">車號追蹤</button>
+      </div>
+      <a class="download" href="../files/臺大校內外騎乘_2025與2026年5月9月10月比較.xlsx">下載 Excel</a>
+    </div>
   </header>
 
-  <section class="controls" aria-label="地圖篩選">
+  <section id="routeControls" class="controls" aria-label="路線比較篩選">
     <fieldset>
       <legend>年度</legend>
       <label><input type="checkbox" name="year" value="2025" checked><span class="line-sample dashed"></span>2025</label>
@@ -56,20 +62,38 @@
     <button id="resetButton" type="button">重設</button>
   </section>
 
+  <section id="trackingControls" class="controls hidden" aria-label="車號追蹤篩選">
+    <label class="control"><span>期間</span><select id="trackingPeriod"></select></label>
+    <label class="control tracking-date"><span>日期</span><select id="trackingDate"></select></label>
+    <label class="control"><span>截至時間</span><input id="trackingCutoff" type="time" value="23:59" step="60"></label>
+    <label class="control search"><span>搜尋車號</span><input id="vehicleSearch" type="search" placeholder="輸入完整或部分車號"></label>
+    <label class="control search"><span>搜尋起訖站</span><input id="trackingStationSearch" type="search" placeholder="站名或代碼"></label>
+    <button id="trackingResetButton" type="button">重設</button>
+    <p class="tracking-scope">顯示所選日期從臺大站借出的車輛，截至選定時間最近一筆臺大出發行程的還車點。</p>
+  </section>
+
   <main>
     <section class="map-panel">
       <div id="map" aria-label="臺大校內外騎乘路線地圖"></div>
-      <div id="loading" class="loading"><span></span><b>載入路線資料…</b></div>
+      <div id="loading" class="loading"><span></span><b id="loadingText">載入路線資料…</b></div>
       <div class="legend">
         <strong>圖例</strong>
-        <p><i class="legend-line may"></i>5月 <i class="legend-line sep"></i>9月 <i class="legend-line oct"></i>10月</p>
-        <p><span class="line-sample dashed"></span>2025　<span class="line-sample solid"></span>2026</p>
-        <p><i class="endpoint-swatch origin"></i>起點 <i class="endpoint-swatch destination"></i>迄點 <i class="endpoint-swatch both"></i>同時為起迄點</p>
-        <small>線寬依「所選時段總量 ÷ 全部樣本日」計算；同一路線兩年會略微錯開，方便比較。</small>
+        <div id="routeLegend">
+          <p><i class="legend-line may"></i>5月 <i class="legend-line sep"></i>9月 <i class="legend-line oct"></i>10月</p>
+          <p><span class="line-sample dashed"></span>2025　<span class="line-sample solid"></span>2026</p>
+          <p><i class="endpoint-swatch origin"></i>起點 <i class="endpoint-swatch destination"></i>迄點 <i class="endpoint-swatch both"></i>同時為起迄點</p>
+          <small>線寬依「所選時段總量 ÷ 全部樣本日」計算；同一路線兩年會略微錯開，方便比較。</small>
+        </div>
+        <div id="trackingLegend" class="hidden">
+          <p><i class="endpoint-swatch origin"></i>臺大借出站 <i class="endpoint-swatch destination"></i>最後還車點</p>
+          <p><i class="endpoint-swatch riding"></i>截至選定時間仍在騎乘</p>
+          <small>全部車號顯示站點車輛數；搜尋車號後顯示個別行程。</small>
+        </div>
       </div>
       <div id="mapMessage" class="map-message hidden"></div>
     </section>
     <aside>
+      <section id="routeSummaryPanel" class="summary-panel">
       <div class="summary-head">
         <div><p class="eyebrow">FILTER RESULT</p><h2>篩選結果</h2></div>
         <strong id="routeCount">0</strong>
@@ -87,11 +111,32 @@
         </table>
       </div>
       <p class="note">清單依日均由高至低列前 80 條；點選列可定位路線。地圖仍呈現所有符合目前篩選的路線。</p>
+      </section>
+      <section id="trackingSummaryPanel" class="summary-panel hidden">
+        <div class="summary-head">
+          <div><p class="eyebrow">VEHICLE TRACE</p><h2>車號追蹤</h2></div>
+          <strong id="vehicleCount">0</strong>
+        </div>
+        <div class="kpis">
+          <div><span>車輛</span><b id="vehicleKpi">0</b></div>
+          <div><span>已還車</span><b id="returnedKpi">0</b></div>
+          <div><span>騎乘中</span><b id="ridingKpi">0</b></div>
+        </div>
+        <p class="status" id="trackingStatusText">選擇日期與截至時間</p>
+        <div class="table-wrap">
+          <table class="tracking-table">
+            <thead><tr><th>車號／時間</th><th>臺大出發 → 最後還車</th></tr></thead>
+            <tbody id="trackingRows"></tbody>
+          </table>
+        </div>
+        <p class="note">清單列出符合條件的車輛；點選可定位其臺大出發站與最後還車點。</p>
+      </section>
     </aside>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="data/manifest.js?v=20261027-2"></script>
-  <script src="app.js?v=20261027-2"></script>
+  <script src="data/manifest.js?v=20261028-1"></script>
+  <script src="data/tracking/manifest.js?v=20261028-1"></script>
+  <script src="app.js?v=20261028-1"></script>
 </body>
 </html>
