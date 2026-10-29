@@ -8,7 +8,7 @@
   <title>臺大校內外騎乘比較與車號追蹤地圖</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="app.css?v=20261028-1">
+  <link rel="stylesheet" href="app.css?v=20261028-2">
 </head>
 <body>
   <header class="topbar">
@@ -63,13 +63,27 @@
   </section>
 
   <section id="trackingControls" class="controls hidden" aria-label="車號追蹤篩選">
-    <label class="control"><span>期間</span><select id="trackingPeriod"></select></label>
-    <label class="control tracking-date"><span>日期</span><select id="trackingDate"></select></label>
-    <label class="control"><span>截至時間</span><input id="trackingCutoff" type="time" value="23:59" step="60"></label>
-    <label class="control search"><span>搜尋車號</span><input id="vehicleSearch" type="search" placeholder="輸入完整或部分車號"></label>
-    <label class="control search"><span>搜尋起訖站</span><input id="trackingStationSearch" type="search" placeholder="站名或代碼"></label>
+    <fieldset class="tracking-field">
+      <legend>期間</legend>
+      <label><select id="trackingPeriod" aria-label="追蹤期間"></select></label>
+    </fieldset>
+    <fieldset class="tracking-field tracking-date-field">
+      <legend>日期</legend>
+      <label><select id="trackingDate" aria-label="追蹤日期"></select></label>
+    </fieldset>
+    <fieldset class="tracking-field">
+      <legend>截至時間</legend>
+      <label><input id="trackingCutoff" type="time" value="23:59" step="60" aria-label="截至時間"></label>
+    </fieldset>
+    <fieldset class="tracking-field tracking-search-field">
+      <legend>搜尋車號</legend>
+      <label><input id="vehicleSearch" type="search" placeholder="輸入完整或部分車號"></label>
+    </fieldset>
+    <fieldset class="tracking-field tracking-search-field">
+      <legend>搜尋起訖站</legend>
+      <label><input id="trackingStationSearch" type="search" placeholder="站名或代碼"></label>
+    </fieldset>
     <button id="trackingResetButton" type="button">重設</button>
-    <p class="tracking-scope">顯示所選日期從臺大站借出的車輛，截至選定時間最近一筆臺大出發行程的還車點。</p>
   </section>
 
   <main>
@@ -86,8 +100,8 @@
         </div>
         <div id="trackingLegend" class="hidden">
           <p><i class="endpoint-swatch origin"></i>臺大借出站 <i class="endpoint-swatch destination"></i>最後還車點</p>
-          <p><i class="endpoint-swatch riding"></i>截至選定時間仍在騎乘</p>
-          <small>全部車號顯示站點車輛數；搜尋車號後顯示個別行程。</small>
+          <p><i class="endpoint-swatch reborrowed"></i>還車後再次借出 <i class="endpoint-swatch riding"></i>截至選定時間仍在騎乘</p>
+          <small>僅追蹤 2026 年；全部車號顯示站點車輛數，搜尋車號後顯示個別行程。</small>
         </div>
       </div>
       <div id="mapMessage" class="map-message hidden"></div>
@@ -136,7 +150,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="data/manifest.js?v=20261028-1"></script>
-  <script src="data/tracking/manifest.js?v=20261028-1"></script>
-  <script src="app.js?v=20261028-1"></script>
+  <script src="data/tracking/manifest.js?v=20261028-2"></script>
+  <script src="app.js?v=20261028-2"></script>
 </body>
 </html>

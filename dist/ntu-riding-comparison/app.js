@@ -26,6 +26,10 @@
   }));
   const stations = stationObjects(manifest.stations);
   const trackingStations = stationObjects(trackingManifest?.stations||manifest.stations);
+  const trackingFieldIndex = Object.fromEntries((trackingManifest?.fields||[]).map((field,index) => [field,index]));
+  const trackingPeriods = (trackingManifest?.periods||[])
+    .filter((row) => String(row.period||"").startsWith("2026-"))
+    .sort((a,b) => String(a.period).localeCompare(String(b.period)));
   const periodMeta = Object.fromEntries(manifest.periods.map((row) => [row.period,row]));
   window.NTU_RIDING_SHARDS = window.NTU_RIDING_SHARDS || {};
   window.NTU_VEHICLE_TRACKING_SHARDS = window.NTU_VEHICLE_TRACKING_SHARDS || {};
@@ -289,58 +293,101 @@
 
   function trackingRecords(shard,cutoff){
     const latest=new Map();
+    const field=(raw,name,fallbackIndex) => raw[trackingFieldIndex[name]??fallbackIndex];
+    const requiredNumber=(value) => Number(value);
+    const optionalNumber=(value) => {
+      if(value===null||value===undefined||value==="")return Number.NaN;
+      const number=Number(value);
+      return Number.isFinite(number)&&number>=0 ? number : Number.NaN;
+    };
+    const station=(value) => {
+      const index=Number(value);
+      return Number.isInteger(index)&&index>=0 ? trackingStations[index] : null;
+    };
     shard.r.forEach((raw) => {
-      const vehicle=String(shard.v[raw[0]]??"");
-      const borrowMinute=Number(raw[2]);
+      const vehicleIndex=requiredNumber(field(raw,"vehicle_index",0));
+      const bikeTypeIndex=requiredNumber(field(raw,"bike_type_index",1));
+      const vehicle=String(shard.v[vehicleIndex]??"");
+      const borrowMinute=requiredNumber(field(raw,"borrow_minute",2));
       if(!vehicle||!Number.isFinite(borrowMinute)||borrowMinute>cutoff)return;
       const record={
         vehicle,
-        bikeType:String(shard.t[raw[1]]??"未標示"),
+        bikeType:String(shard.t[bikeTypeIndex]??"未標示"),
         borrowMinute,
-        returnMinute:Number(raw[3]),
-        origin:trackingStations[raw[4]],
-        destination:trackingStations[raw[5]]
+        returnMinute:requiredNumber(field(raw,"return_minute_from_borrow_day",3)),
+        origin:station(field(raw,"origin_station_index",4)),
+        seedDestination:station(field(raw,"destination_station_index",5)),
+        reborrowMinute:optionalNumber(field(raw,"reborrow_minute_from_seed_day",6)),
+        reborrowReturnMinute:optionalNumber(field(raw,"reborrow_return_minute_from_seed_day",7)),
+        reborrowDestination:station(field(raw,"reborrow_destination_station_index",8))
       };
-      if(!record.origin||!record.destination)return;
+      if(!record.origin||!record.seedDestination)return;
       const prior=latest.get(vehicle);
-      if(!prior||record.borrowMinute>prior.borrowMinute||(record.borrowMinute===prior.borrowMinute&&record.returnMinute>prior.returnMinute))latest.set(vehicle,record);
+      const returnSort=Number.isFinite(record.returnMinute)?record.returnMinute:-1;
+      const priorReturnSort=Number.isFinite(prior?.returnMinute)?prior.returnMinute:-1;
+      if(!prior||record.borrowMinute>prior.borrowMinute||(record.borrowMinute===prior.borrowMinute&&returnSort>priorReturnSort))latest.set(vehicle,record);
     });
-    return [...latest.values()].map((record) => ({...record,returned:record.returnMinute<=cutoff}));
+    return [...latest.values()].map((record) => {
+      const seedReturned=Number.isFinite(record.returnMinute)&&record.returnMinute>=record.borrowMinute&&record.returnMinute<=cutoff;
+      const hasReborrow=seedReturned&&Number.isFinite(record.reborrowMinute)&&record.reborrowMinute>=record.returnMinute&&record.reborrowMinute<=cutoff;
+      const reborrowReturned=hasReborrow&&Number.isFinite(record.reborrowReturnMinute)&&record.reborrowReturnMinute>=record.reborrowMinute&&record.reborrowReturnMinute<=cutoff&&record.reborrowDestination;
+      return {
+        ...record,
+        seedReturned,
+        reborrowed:Boolean(hasReborrow),
+        reborrowReturned:Boolean(reborrowReturned),
+        returned:Boolean(hasReborrow?reborrowReturned:seedReturned),
+        destination:reborrowReturned?record.reborrowDestination:record.seedDestination,
+        activityMinute:hasReborrow?record.reborrowMinute:record.borrowMinute
+      };
+    });
   }
 
   function trackingPopup(record,day){
-    const destination=record.returned?`${safe(record.destination.name)} (${safe(record.destination.code)})`:'<span class="riding-status">騎乘中，尚未還車</span>';
-    return `<div class="popup-title">車號 ${safe(record.vehicle)}</div><div class="popup-meta">${safe(day)}｜${safe(record.bikeType)}</div><div>${minuteLabel(record.borrowMinute)}　${safe(record.origin.name)}</div><div>→ ${record.returned?minuteLabel(record.returnMinute):"截至所選時間"}　${destination}</div>`;
+    const seedLine=record.seedReturned
+      ? `<div>→ ${minuteLabel(record.returnMinute)}　${safe(record.seedDestination.name)} (${safe(record.seedDestination.code)})</div>`
+      : '<div class="riding-status">截至所選時間仍在騎乘，尚未還車</div>';
+    const reborrowLine=record.reborrowed
+      ? `<div>${minuteLabel(record.reborrowMinute)}　由同站再次借出</div>${record.reborrowReturned?`<div>→ ${minuteLabel(record.reborrowReturnMinute)}　${safe(record.reborrowDestination.name)} (${safe(record.reborrowDestination.code)})</div>`:'<div class="riding-status">再次借出後仍在騎乘</div>'}`
+      : "";
+    return `<div class="popup-title">車號 ${safe(record.vehicle)}</div><div class="popup-meta">${safe(day)}｜${safe(record.bikeType)}</div><div>${minuteLabel(record.borrowMinute)}　${safe(record.origin.name)}</div>${seedLine}${reborrowLine}`;
   }
 
   function trackingRowHtml(record,index){
     const destination=record.returned
       ? `${safe(record.destination.name)}<small> (${safe(record.destination.code)})</small>`
-      : '<span class="riding-status">騎乘中</span>';
-    return `<tr data-index="${index}"><td><span class="vehicle-id">${safe(record.vehicle)}</span><span class="vehicle-meta">${safe(record.bikeType)}｜${minuteLabel(record.borrowMinute)}${record.returned?`–${minuteLabel(record.returnMinute)}`:" 起"}</span></td><td class="route-name">${safe(record.origin.name)}<br><small>→ ${destination}</small></td></tr>`;
+      : `<span class="riding-status">${record.reborrowed?"再次借出後騎乘中":"騎乘中"}</span>`;
+    const endMinute=record.reborrowReturned?record.reborrowReturnMinute:(record.seedReturned?record.returnMinute:null);
+    return `<tr data-index="${index}"><td><span class="vehicle-id">${safe(record.vehicle)}</span><span class="vehicle-meta">${safe(record.bikeType)}｜${minuteLabel(record.borrowMinute)}${Number.isFinite(endMinute)?`–${minuteLabel(endMinute)}`:" 起"}${record.reborrowed?"｜再次借出":""}</span></td><td class="route-name">${safe(record.origin.name)}<br><small>→ ${destination}</small></td></tr>`;
   }
 
-  function addAggregateMarker(station,count,color,role,label,vehicles){
+  function trackingMarker(station,kind,size,popup){
     if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return null;
-    const radius=Math.max(6,Math.min(24,5+Math.sqrt(count)*1.6));
-    const isOrigin=role==="origin";
-    const marker=L.circleMarker([station.lat,station.lng],{
-      renderer:trackingRenderer,
+    const pixels=Math.max(14,Math.round(size));
+    const marker=L.marker([station.lat,station.lng],{
       pane:"trackingPane",
-      radius:isOrigin?radius+3:radius,
-      color,
-      weight:isOrigin?3:2,
-      fillColor:color,
-      fillOpacity:isOrigin?.12:.68
+      icon:L.divIcon({
+        className:"tracking-marker-icon",
+        html:`<span class="tracking-pin ${safe(kind)}" style="--marker-size:${pixels}px"></span>`,
+        iconSize:[pixels,pixels],
+        iconAnchor:[pixels/2,pixels/2]
+      })
     }).addTo(map);
-    const vehicleList=vehicles.slice(0,12).map(safe).join("、");
-    marker.bindPopup(`<div class="popup-title">${safe(station.name)}</div><div class="popup-meta">${safe(station.code)}｜${safe(label)}</div><div class="popup-value">${fmt.format(count)} 輛</div>${vehicleList?`<div>${vehicleList}${vehicles.length>12?"…":""}</div>`:""}`);
+    if(popup)marker.bindPopup(popup);
     state.markers.push(marker);
     return marker;
   }
 
+  function addAggregateMarker(station,count,kind,label,vehicles){
+    if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return null;
+    const size=Math.max(14,Math.min(48,12+Math.sqrt(count)*3.2));
+    const vehicleList=vehicles.slice(0,12).map(safe).join("、");
+    const popup=`<div class="popup-title">${safe(station.name)}</div><div class="popup-meta">${safe(station.code)}｜${safe(label)}</div><div class="popup-value">${fmt.format(count)} 輛</div>${vehicleList?`<div>${vehicleList}${vehicles.length>12?"…":""}</div>`:""}`;
+    return trackingMarker(station,kind,size,popup);
+  }
+
   function renderTrackingAggregate(records){
-    const origins=new Map(),destinations=new Map(),riding=new Map();
+    const origins=new Map(),destinations=new Map(),reborrowed=new Map(),riding=new Map();
     const collect=(target,station,vehicle) => {
       const row=target.get(station.index)||{station,vehicles:[]};
       row.vehicles.push(vehicle);
@@ -348,43 +395,56 @@
     };
     records.forEach((record) => {
       collect(origins,record.origin,record.vehicle);
+      if(record.reborrowed)collect(reborrowed,record.seedDestination,record.vehicle);
       if(record.returned)collect(destinations,record.destination,record.vehicle);
-      else collect(riding,record.origin,record.vehicle);
+      else if(!record.reborrowed)collect(riding,record.origin,record.vehicle);
     });
-    origins.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,ORIGIN_COLOR,"origin","臺大借出站",row.vehicles));
-    destinations.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,DESTINATION_COLOR,"destination","截至時間最後還車點",row.vehicles));
-    riding.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,RIDING_COLOR,"riding","截至時間仍在騎乘",row.vehicles));
+    origins.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"origin","臺大借出站",row.vehicles));
+    destinations.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"destination","截至時間最後還車點",row.vehicles));
+    reborrowed.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"reborrowed","還車後再次借出",row.vehicles));
+    riding.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"riding","截至時間仍在騎乘",row.vehicles));
   }
 
   function renderTrackingRoutes(records,day){
     records.forEach((record) => {
-      let line=null;
+      let line=null,secondLine=null;
       const hasOrigin=Number.isFinite(record.origin.lat)&&Number.isFinite(record.origin.lng);
-      const hasDestination=Number.isFinite(record.destination.lat)&&Number.isFinite(record.destination.lng);
-      if(record.returned&&hasOrigin&&hasDestination){
-        line=L.polyline([[record.origin.lat,record.origin.lng],[record.destination.lat,record.destination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:TRACE_COLOR,weight:4,opacity:.76,lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record,day));
+      const hasSeedDestination=Number.isFinite(record.seedDestination.lat)&&Number.isFinite(record.seedDestination.lng);
+      const hasFinalDestination=record.reborrowReturned&&record.reborrowDestination&&Number.isFinite(record.reborrowDestination.lat)&&Number.isFinite(record.reborrowDestination.lng);
+      if(record.seedReturned&&hasOrigin&&hasSeedDestination){
+        line=L.polyline([[record.origin.lat,record.origin.lng],[record.seedDestination.lat,record.seedDestination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:TRACE_COLOR,weight:4,opacity:.76,lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record,day));
         state.layers.push(line);
+      }
+      if(record.reborrowReturned&&hasSeedDestination&&hasFinalDestination){
+        secondLine=L.polyline([[record.seedDestination.lat,record.seedDestination.lng],[record.reborrowDestination.lat,record.reborrowDestination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:RIDING_COLOR,weight:4,opacity:.82,dashArray:"9 7",lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record,day));
+        state.layers.push(secondLine);
       }
       let origin=null;
       if(hasOrigin){
-        origin=L.circleMarker([record.origin.lat,record.origin.lng],{renderer:trackingRenderer,pane:"trackingPane",radius:7,color:"#fff",weight:2,fillColor:record.returned?ORIGIN_COLOR:RIDING_COLOR,fillOpacity:1}).addTo(map).bindPopup(trackingPopup(record,day));
-        state.markers.push(origin);
+        origin=trackingMarker(record.origin,record.seedReturned?"origin":"riding",16,trackingPopup(record,day));
       }
-      if(record.returned&&hasDestination){
-        const destination=L.circleMarker([record.destination.lat,record.destination.lng],{renderer:trackingRenderer,pane:"trackingPane",radius:7,color:"#fff",weight:2,fillColor:DESTINATION_COLOR,fillOpacity:1}).addTo(map).bindPopup(trackingPopup(record,day));
-        state.markers.push(destination);
+      if(record.seedReturned&&hasSeedDestination){
+        trackingMarker(record.seedDestination,record.reborrowed?"reborrowed":"destination",16,trackingPopup(record,day));
+      }
+      if(record.reborrowReturned&&hasFinalDestination){
+        trackingMarker(record.reborrowDestination,"destination",16,trackingPopup(record,day));
       }
       record.line=line;
+      record.secondLine=secondLine;
       record.originMarker=origin;
     });
   }
 
-  function fitTracking(records){
+  function trackingPoints(record){
     const points=[];
-    records.forEach((record) => {
-      if(Number.isFinite(record.origin.lat)&&Number.isFinite(record.origin.lng))points.push([record.origin.lat,record.origin.lng]);
-      if(record.returned&&Number.isFinite(record.destination.lat)&&Number.isFinite(record.destination.lng))points.push([record.destination.lat,record.destination.lng]);
-    });
+    if(Number.isFinite(record.origin.lat)&&Number.isFinite(record.origin.lng))points.push([record.origin.lat,record.origin.lng]);
+    if(record.seedReturned&&Number.isFinite(record.seedDestination.lat)&&Number.isFinite(record.seedDestination.lng))points.push([record.seedDestination.lat,record.seedDestination.lng]);
+    if(record.reborrowReturned&&record.reborrowDestination&&Number.isFinite(record.reborrowDestination.lat)&&Number.isFinite(record.reborrowDestination.lng))points.push([record.reborrowDestination.lat,record.reborrowDestination.lng]);
+    return points;
+  }
+
+  function fitTracking(records){
+    const points=records.flatMap(trackingPoints);
     if(points.length>1)map.fitBounds(L.latLngBounds(points),{padding:[45,45],maxZoom:15});
     else if(points.length===1)map.setView(points[0],15);
     else map.setView([25.0183,121.5395],14);
@@ -392,7 +452,7 @@
 
   async function refreshTracking(){
     if(state.mode!=="tracking")return;
-    if(!trackingManifest){showTrackingEmpty("車號追蹤資料尚未完成載入");return;}
+    if(!trackingManifest||!trackingPeriods.length){showTrackingEmpty("目前沒有 2026 年車號追蹤資料");return;}
     const day=$("trackingDate").value;
     if(!day){showTrackingEmpty("請選擇日期");return;}
     const token=++state.loadToken;
@@ -410,10 +470,10 @@
     const stationQuery=norm($("trackingStationSearch").value);
     let records=trackingRecords(shard,cutoff).filter((record) => {
       if(vehicleQuery&&!norm(record.vehicle).includes(vehicleQuery))return false;
-      if(stationQuery&&!record.origin.search.includes(stationQuery)&&!(record.returned&&record.destination.search.includes(stationQuery)))return false;
+      if(stationQuery&&![record.origin,record.seedDestination,record.reborrowDestination].filter(Boolean).some((station) => station.search.includes(stationQuery)))return false;
       return true;
     });
-    records.sort((a,b) => b.borrowMinute-a.borrowMinute||a.vehicle.localeCompare(b.vehicle,"zh-Hant"));
+    records.sort((a,b) => b.activityMinute-a.activityMinute||a.vehicle.localeCompare(b.vehicle,"zh-Hant"));
     clearMap();
     if(vehicleQuery)renderTrackingRoutes(records,day);
     else renderTrackingAggregate(records);
@@ -426,15 +486,17 @@
   function renderTrackingSide(records,day,cutoff,isVehicleSearch){
     const returned=records.filter((record) => record.returned).length;
     const riding=records.length-returned;
+    const reborrowed=records.filter((record) => record.reborrowed).length;
     $("vehicleCount").textContent=fmt.format(records.length);
     $("vehicleKpi").textContent=fmt.format(records.length);
     $("returnedKpi").textContent=fmt.format(returned);
     $("ridingKpi").textContent=fmt.format(riding);
-    $("trackingStatusText").textContent=`${day}｜截至 ${minuteLabel(cutoff)}｜${isVehicleSearch?"個別路線":"站點彙總"}`;
+    $("trackingStatusText").textContent=`${day}｜截至 ${minuteLabel(cutoff)}｜再次借出 ${fmt.format(reborrowed)} 輛｜${isVehicleSearch?"個別路線":"站點彙總"}`;
     $("trackingRows").innerHTML=records.slice(0,250).map(trackingRowHtml).join("")||'<tr><td colspan="2">沒有符合條件的車輛</td></tr>';
     [...$("trackingRows").querySelectorAll("tr[data-index]")].forEach((row) => row.addEventListener("click",() => {
       const record=records[Number(row.dataset.index)];
-      if(record.line){map.fitBounds(record.line.getBounds(),{padding:[80,80],maxZoom:17});record.line.openPopup();}
+      const points=trackingPoints(record);
+      if(points.length>1){map.fitBounds(L.latLngBounds(points),{padding:[80,80],maxZoom:17});(record.secondLine||record.line)?.openPopup();}
       else if(record.originMarker){map.setView([record.origin.lat,record.origin.lng],16);record.originMarker.openPopup();}
     }));
   }
@@ -452,7 +514,7 @@
   }
 
   function trackingPeriod(){
-    return trackingManifest?.periods?.find((row) => row.period===$("trackingPeriod").value);
+    return trackingPeriods.find((row) => row.period===$("trackingPeriod").value);
   }
 
   function updateTrackingDates(preferred){
@@ -464,15 +526,15 @@
   }
 
   function initializeTrackingControls(){
-    if(!trackingManifest){
-      $("trackingModeButton").title="車號追蹤資料尚未完成載入";
+    if(!trackingManifest||!trackingPeriods.length){
+      $("trackingModeButton").title="目前沒有 2026 年車號追蹤資料";
       return;
     }
-    trackingManifest.periods.forEach((period) => {
+    trackingPeriods.forEach((period) => {
       const label=`${period.period}（${period.sample_days}日）`;
       $("trackingPeriod").add(new Option(label,period.period));
     });
-    const latest=trackingManifest.periods.at(-1);
+    const latest=trackingPeriods.at(-1);
     $("trackingPeriod").value=latest?.period||"";
     updateTrackingDates(latest?.dates?.at(-1));
   }
@@ -536,8 +598,8 @@
   $("vehicleSearch").addEventListener("input",debounce(refreshTracking,240));
   $("trackingStationSearch").addEventListener("input",debounce(refreshTracking,240));
   $("trackingResetButton").addEventListener("click",() => {
-    if(trackingManifest){
-      const latest=trackingManifest.periods.at(-1);
+    if(trackingPeriods.length){
+      const latest=trackingPeriods.at(-1);
       $("trackingPeriod").value=latest?.period||"";
       updateTrackingDates(latest?.dates?.at(-1));
     }
