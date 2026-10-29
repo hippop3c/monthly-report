@@ -8,7 +8,7 @@
   <title>臺大校內外騎乘比較與車號追蹤地圖</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="app.css?v=20261029-1">
+  <link rel="stylesheet" href="app.css?v=20261029-2">
 </head>
 <body>
   <header class="topbar">
@@ -128,10 +128,14 @@
         <div id="trackingLegend" class="hidden">
           <p><i class="endpoint-swatch origin"></i>臺大借出站 <i class="endpoint-swatch destination"></i>最後還車點</p>
           <p><i class="endpoint-swatch reborrowed"></i>還車後再次借出 <i class="endpoint-swatch riding"></i>截至選定時間仍在騎乘</p>
-          <small>僅追蹤 2026 年；全部車號顯示站點車輛數，搜尋車號後顯示個別行程。</small>
+          <small>點選臺大借出站圖標，可查看該站所有車輛路線；包含還車後再次借出，直到最後還車點。</small>
         </div>
       </div>
       <div id="mapMessage" class="map-message hidden"></div>
+      <div id="trackingDrilldown" class="tracking-drilldown hidden">
+        <div><small>借出站路線</small><strong id="trackingDrilldownText"></strong></div>
+        <button id="trackingDrilldownClose" type="button">返回全部站點</button>
+      </div>
     </section>
     <aside>
       <section id="routeSummaryPanel" class="summary-panel">
@@ -178,6 +182,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="data/manifest.js?v=20261028-1"></script>
   <script src="data/tracking/manifest.js?v=20261028-2"></script>
-  <script src="app.js?v=20261029-1"></script>
+  <script src="app.js?v=20261029-2"></script>
 </body>
 </html>

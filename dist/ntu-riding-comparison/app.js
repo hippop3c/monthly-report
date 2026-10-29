@@ -9,7 +9,7 @@
   const RIDING_COLOR = "#f59e0b";
   const TRACE_COLOR = "#334155";
   const fmt = new Intl.NumberFormat("zh-TW", {maximumFractionDigits:1});
-  const state = {mode:"route", layers:[], markers:[], loadToken:0};
+  const state = {mode:"route", layers:[], markers:[], drillLayers:[], aggregateTrackingRecords:[], activeOriginIndex:null, loadToken:0};
   const $ = (id) => document.getElementById(id);
   const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[character]);
   const norm = (value) => String(value ?? "").normalize("NFKC").replace(/臺/g,"台").replace(/\s+/g,"").toLowerCase();
@@ -192,11 +192,21 @@
     await trackingLoadPromises.get(day);
   }
 
+  function clearTrackingDrilldown(restoreBounds=false){
+    state.drillLayers.forEach((layer) => map.removeLayer(layer));
+    state.drillLayers=[];
+    state.activeOriginIndex=null;
+    $("trackingDrilldown").classList.add("hidden");
+    if(restoreBounds&&state.aggregateTrackingRecords.length)fitTracking(state.aggregateTrackingRecords);
+  }
+
   function clearMap(){
+    clearTrackingDrilldown(false);
     state.layers.forEach((layer) => map.removeLayer(layer));
     state.markers.forEach((layer) => map.removeLayer(layer));
     state.layers=[];
     state.markers=[];
+    state.aggregateTrackingRecords=[];
   }
 
   function startLoading(label){
@@ -447,15 +457,86 @@
     };
   }
 
-  function addAggregateMarker(station,count,kind,label,vehicles,effectiveDays,totalDays){
+  function addDrillRouteLayer(coords,style,popup){
+    const layer=L.polyline(coords,{renderer:trackingRenderer,pane:"trackingPane",lineCap:"round",...style}).addTo(map).bindPopup(popup);
+    const baseWeight=style.weight;
+    const baseOpacity=style.opacity;
+    layer.on("mouseover",() => {layer.bringToFront();layer.setStyle({opacity:1,weight:Math.min(11,baseWeight+2)});});
+    layer.on("mouseout",() => layer.setStyle({opacity:baseOpacity,weight:baseWeight}));
+    state.drillLayers.push(layer);
+    return layer;
+  }
+
+  function drillRoutePopup(group,days){
+    const record=group.records[0];
+    const daily=new Map(days.map((day) => [day,0]));
+    group.records.forEach((row) => daily.set(row.day,(daily.get(row.day)||0)+1));
+    const metric=positiveAverage(days.map((day) => daily.get(day)||0));
+    const path=[record.origin.name,record.seedDestination.name];
+    if(record.reborrowReturned&&record.reborrowDestination)path.push(record.reborrowDestination.name);
+    const status=record.reborrowed
+      ? (record.reborrowReturned?"還車後再次借出，已到最後還車點":"還車後再次借出，目前仍在騎乘")
+      : "第一次還車路線";
+    const samples=group.records.slice(0,12).map((row) => `${safe(row.day)} ${safe(row.vehicle)}`).join("、");
+    return `<div class="popup-title">${path.map(safe).join(" → ")}</div><div class="popup-meta">${safe(status)}</div><div class="popup-value">非零日均 ${fmt.format(metric.average)} 輛</div><div>共 ${fmt.format(group.records.length)} 筆｜有效 ${metric.effectiveDays}/${days.length} 日</div>${samples?`<div>${samples}${group.records.length>12?"…":""}</div>`:""}`;
+  }
+
+  function renderOriginRouteDrilldown(records,station,days){
+    clearTrackingDrilldown(false);
+    const stationRecords=records.filter((record) => record.origin.index===station.index);
+    const groups=new Map();
+    stationRecords.forEach((record) => {
+      if(!record.seedReturned)return;
+      const stateKey=record.reborrowed?(record.reborrowReturned?"reborrow-returned":"reborrow-riding"):"direct";
+      const finalIndex=record.reborrowReturned&&record.reborrowDestination?record.reborrowDestination.index:-1;
+      const key=`${record.seedDestination.index}|${finalIndex}|${stateKey}`;
+      const group=groups.get(key)||{records:[]};
+      group.records.push(record);
+      groups.set(key,group);
+    });
+    const routeGroups=[...groups.values()].sort((a,b) => b.records.length-a.records.length);
+    const bounds=[];
+    routeGroups.forEach((group) => {
+      const record=group.records[0];
+      const daily=new Map(days.map((day) => [day,0]));
+      group.records.forEach((row) => daily.set(row.day,(daily.get(row.day)||0)+1));
+      const metric=positiveAverage(days.map((day) => daily.get(day)||0));
+      const weight=Math.max(2,Math.min(8,1.6+Math.sqrt(metric.average)*.55));
+      const popup=drillRoutePopup(group,days);
+      const firstCoords=[[record.origin.lat,record.origin.lng],[record.seedDestination.lat,record.seedDestination.lng]];
+      if(firstCoords.flat().every(Number.isFinite)){
+        addDrillRouteLayer(firstCoords,{color:TRACE_COLOR,weight,opacity:.56},popup);
+        bounds.push(...firstCoords);
+      }
+      if(record.reborrowReturned&&record.reborrowDestination){
+        const secondCoords=[[record.seedDestination.lat,record.seedDestination.lng],[record.reborrowDestination.lat,record.reborrowDestination.lng]];
+        if(secondCoords.flat().every(Number.isFinite)){
+          addDrillRouteLayer(secondCoords,{color:RIDING_COLOR,weight,opacity:.72,dashArray:"9 7"},popup);
+          bounds.push(...secondCoords);
+        }
+      }
+    });
+    const reborrowCompleted=stationRecords.filter((record) => record.reborrowReturned).length;
+    const riding=stationRecords.filter((record) => !record.returned).length;
+    state.activeOriginIndex=station.index;
+    $("trackingDrilldownText").textContent=`${station.name}｜${fmt.format(stationRecords.length)} 筆・${fmt.format(routeGroups.length)} 條路線｜再借完成 ${fmt.format(reborrowCompleted)} 筆${riding?`・騎乘中 ${fmt.format(riding)} 筆`:""}`;
+    $("trackingDrilldown").classList.remove("hidden");
+    if(bounds.length>1)map.fitBounds(L.latLngBounds(bounds),{padding:[55,55],maxZoom:15});
+    else map.setView([station.lat,station.lng],16);
+  }
+
+  function addAggregateMarker(station,count,kind,label,vehicles,effectiveDays,totalDays,onClick){
     if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return null;
     const size=Math.max(14,Math.min(48,12+Math.sqrt(count)*3.2));
     const vehicleList=vehicles.slice(0,12).map(safe).join("、");
     const popup=`<div class="popup-title">${safe(station.name)}</div><div class="popup-meta">${safe(station.code)}｜${safe(label)}</div><div class="popup-value">非零日均 ${fmt.format(count)} 輛</div><div>有效 ${effectiveDays}/${totalDays} 日（0 不列入平均）</div>${vehicleList?`<div>${vehicleList}${vehicles.length>12?"…":""}</div>`:""}`;
-    return trackingMarker(station,kind,size,popup);
+    const marker=trackingMarker(station,kind,size,popup);
+    if(marker&&onClick)marker.on("click",onClick);
+    return marker;
   }
 
   function renderTrackingAggregate(records,days){
+    state.aggregateTrackingRecords=records;
     const origins=new Map(),destinations=new Map(),reborrowed=new Map(),riding=new Map();
     const collect=(target,station,vehicle,day) => {
       const row=target.get(station.index)||{station,vehicles:new Set(),daily:new Map()};
@@ -473,7 +554,9 @@
     const draw=(target,kind,label) => target.forEach((row) => {
       const metric=positiveAverage(days.map((day) => row.daily.get(day)||0));
       const vehicles=[...row.vehicles];
-      const marker=addAggregateMarker(row.station,metric.average,kind,label,vehicles,metric.effectiveDays,days.length);
+      const originRow=origins.get(row.station.index);
+      const onClick=originRow?() => renderOriginRouteDrilldown(records,originRow.station,days):null;
+      const marker=addAggregateMarker(row.station,metric.average,kind,label,vehicles,metric.effectiveDays,days.length,onClick);
       summaries.push({...row,kind,label,average:metric.average,effectiveDays:metric.effectiveDays,marker});
     });
     draw(origins,"origin","臺大借出站");
@@ -591,7 +674,7 @@
     $("trackingSecondHeader").textContent=isVehicleSearch?"臺大出發 → 最後還車":"站點／非零日均";
     $("trackingNote").textContent=isVehicleSearch
       ? "清單保留每個選定日期的實際行程；點選可定位臺大出發站與最後還車點。"
-      : "站點數字為所選日期中有數值日期的平均；0 不列入分母。";
+      : "點選臺大借出站可查看完整路線；站點數字為有數值日期的平均，0 不列入分母。";
     const rows=isVehicleSearch?records:aggregateRows;
     $("trackingRows").innerHTML=(isVehicleSearch
       ? rows.slice(0,250).map(trackingRowHtml)
@@ -600,7 +683,10 @@
     [...$("trackingRows").querySelectorAll("tr[data-index]")].forEach((row) => row.addEventListener("click",() => {
       if(!isVehicleSearch){
         const summary=aggregateRows[Number(row.dataset.index)];
-        if(summary?.marker){map.setView([summary.station.lat,summary.station.lng],16);summary.marker.openPopup();}
+        const originSummary=summary&&aggregateRows.find((item) => item.kind==="origin"&&item.station.index===summary.station.index);
+        if(originSummary)renderOriginRouteDrilldown(records,originSummary.station,days);
+        else if(summary?.marker)map.setView([summary.station.lat,summary.station.lng],16);
+        summary?.marker?.openPopup();
         return;
       }
       const record=records[Number(row.dataset.index)];
@@ -725,6 +811,7 @@
   $("trackingCutoff").addEventListener("change",refreshTracking);
   $("vehicleSearch").addEventListener("input",debounce(refreshTracking,240));
   $("trackingStationSearch").addEventListener("input",debounce(refreshTracking,240));
+  $("trackingDrilldownClose").addEventListener("click",() => {map.closePopup();clearTrackingDrilldown(true);});
   $("trackingResetButton").addEventListener("click",() => {
     if(trackingPeriods.length){
       const latest=trackingPeriods.at(-1);
