@@ -31,6 +31,7 @@
     .filter((row) => String(row.period||"").startsWith("2026-"))
     .sort((a,b) => String(a.period).localeCompare(String(b.period)));
   const periodMeta = Object.fromEntries(manifest.periods.map((row) => [row.period,row]));
+  const trackingLoadPromises = new Map();
   window.NTU_RIDING_SHARDS = window.NTU_RIDING_SHARDS || {};
   window.NTU_VEHICLE_TRACKING_SHARDS = window.NTU_VEHICLE_TRACKING_SHARDS || {};
 
@@ -63,6 +64,10 @@
     const clock=String(index).padStart(2,"0");
     return `<label><input type="checkbox" name="timeHour" value="${index}" checked><span>${clock}:00–${clock}:59</span></label>`;
   }).join("");
+  $("trackingHourOptions").innerHTML=manifest.hours.map((_hour,index) => {
+    const clock=String(index).padStart(2,"0");
+    return `<label><input type="checkbox" name="trackingTimeHour" value="${index}" checked><span>${clock}:00–${clock}:59</span></label>`;
+  }).join("");
   manifest.categories.forEach((category,index) => $("categorySelect").add(new Option(category, String(index))));
 
   function selectedValues(name){
@@ -71,6 +76,14 @@
 
   function selectedHours(){
     return selectedValues("timeHour").map(Number).sort((a,b) => a-b);
+  }
+
+  function selectedTrackingHours(){
+    return selectedValues("trackingTimeHour").map(Number).sort((a,b) => a-b);
+  }
+
+  function selectedTrackingDates(){
+    return selectedValues("trackingDate").sort();
   }
 
   function compactHourLabel(hours){
@@ -102,14 +115,55 @@
     updateTimeSummary();
   }
 
-  function positionTimeMenu(){
-    if(!$("timePicker").open)return;
-    const rect=$("timePicker").getBoundingClientRect();
-    const menu=$("timeMenu");
-    const width=Math.min(590,window.innerWidth-24);
+  function updateTrackingTimeSummary(){
+    const hours=selectedTrackingHours();
+    const label=compactHourLabel(hours);
+    $("trackingTimeSummary").textContent=hours.length>8&&hours.length<24 ? `${hours.length}個時段` : label;
+    $("trackingTimeSummary").title=label;
+  }
+
+  function setTrackingHours(hours){
+    const chosen=new Set(hours);
+    document.querySelectorAll('input[name="trackingTimeHour"]').forEach((node) => {node.checked=chosen.has(Number(node.value));});
+    updateTrackingTimeSummary();
+  }
+
+  function trackingDateLabel(days=selectedTrackingDates()){
+    if(!days.length)return "未選日期";
+    const period=trackingPeriod();
+    const allDates=period?.dates||[];
+    if(days.length===allDates.length)return `全部（${days.length}日）`;
+    if(days.length===1)return days[0];
+    return `${days.length}個日期`;
+  }
+
+  function updateTrackingDateSummary(){
+    const days=selectedTrackingDates();
+    $("trackingDateSummary").textContent=trackingDateLabel(days);
+    $("trackingDateSummary").title=days.join("、")||"未選日期";
+  }
+
+  function setTrackingDates(days){
+    const chosen=new Set(days);
+    document.querySelectorAll('input[name="trackingDate"]').forEach((node) => {node.checked=chosen.has(node.value);});
+    updateTrackingDateSummary();
+  }
+
+  function positionPickerMenu(pickerId,menuId,maximumWidth=590){
+    const picker=$(pickerId);
+    if(!picker?.open)return;
+    const rect=picker.getBoundingClientRect();
+    const menu=$(menuId);
+    const width=Math.min(maximumWidth,window.innerWidth-24);
     menu.style.width=`${width}px`;
     menu.style.left=`${Math.max(12,Math.min(rect.left,window.innerWidth-width-12))}px`;
     menu.style.top=`${rect.bottom+6}px`;
+  }
+
+  function positionTimeMenu(){positionPickerMenu("timePicker","timeMenu",590);}
+  function positionTrackingMenus(){
+    positionPickerMenu("trackingDatePicker","trackingDateMenu",430);
+    positionPickerMenu("trackingTimePicker","trackingTimeMenu",590);
   }
 
   function injectScript(src){
@@ -131,7 +185,11 @@
     if(window.NTU_VEHICLE_TRACKING_SHARDS[day])return;
     const descriptor=trackingManifest?.days?.[day];
     if(!descriptor)throw new Error("所選日期沒有車號追蹤資料");
-    await injectScript(`data/tracking/${descriptor.file}?v=20261028-1`);
+    if(!trackingLoadPromises.has(day)){
+      const promise=injectScript(`data/tracking/${descriptor.file}?v=20261028-1`).finally(() => trackingLoadPromises.delete(day));
+      trackingLoadPromises.set(day,promise);
+    }
+    await trackingLoadPromises.get(day);
   }
 
   function clearMap(){
@@ -291,7 +349,7 @@
     return Math.max(0,Math.min(1439,(Number.isFinite(hour)?hour:23)*60+(Number.isFinite(minute)?minute:59)));
   }
 
-  function trackingRecords(shard,cutoff){
+  function trackingRecords(shard,cutoff,hourSet,day){
     const latest=new Map();
     const field=(raw,name,fallbackIndex) => raw[trackingFieldIndex[name]??fallbackIndex];
     const requiredNumber=(value) => Number(value);
@@ -310,7 +368,10 @@
       const vehicle=String(shard.v[vehicleIndex]??"");
       const borrowMinute=requiredNumber(field(raw,"borrow_minute",2));
       if(!vehicle||!Number.isFinite(borrowMinute)||borrowMinute>cutoff)return;
+      const borrowHour=Math.floor((((borrowMinute%1440)+1440)%1440)/60);
+      if(hourSet&&!hourSet.has(borrowHour))return;
       const record={
+        day,
         vehicle,
         bikeType:String(shard.t[bikeTypeIndex]??"未標示"),
         borrowMinute,
@@ -343,7 +404,7 @@
     });
   }
 
-  function trackingPopup(record,day){
+  function trackingPopup(record,day=record.day){
     const seedLine=record.seedReturned
       ? `<div>→ ${minuteLabel(record.returnMinute)}　${safe(record.seedDestination.name)} (${safe(record.seedDestination.code)})</div>`
       : '<div class="riding-status">截至所選時間仍在騎乘，尚未還車</div>';
@@ -358,7 +419,7 @@
       ? `${safe(record.destination.name)}<small> (${safe(record.destination.code)})</small>`
       : `<span class="riding-status">${record.reborrowed?"再次借出後騎乘中":"騎乘中"}</span>`;
     const endMinute=record.reborrowReturned?record.reborrowReturnMinute:(record.seedReturned?record.returnMinute:null);
-    return `<tr data-index="${index}"><td><span class="vehicle-id">${safe(record.vehicle)}</span><span class="vehicle-meta">${safe(record.bikeType)}｜${minuteLabel(record.borrowMinute)}${Number.isFinite(endMinute)?`–${minuteLabel(endMinute)}`:" 起"}${record.reborrowed?"｜再次借出":""}</span></td><td class="route-name">${safe(record.origin.name)}<br><small>→ ${destination}</small></td></tr>`;
+    return `<tr data-index="${index}"><td><span class="vehicle-id">${safe(record.vehicle)}</span><span class="vehicle-meta">${safe(record.day)}｜${safe(record.bikeType)}<br>${minuteLabel(record.borrowMinute)}${Number.isFinite(endMinute)?`–${minuteLabel(endMinute)}`:" 起"}${record.reborrowed?"｜再次借出":""}</span></td><td class="route-name">${safe(record.origin.name)}<br><small>→ ${destination}</small></td></tr>`;
   }
 
   function trackingMarker(station,kind,size,popup){
@@ -378,56 +439,73 @@
     return marker;
   }
 
-  function addAggregateMarker(station,count,kind,label,vehicles){
+  function positiveAverage(values){
+    const positive=values.map(Number).filter((value) => Number.isFinite(value)&&value>0);
+    return {
+      average:positive.length?positive.reduce((sum,value) => sum+value,0)/positive.length:0,
+      effectiveDays:positive.length
+    };
+  }
+
+  function addAggregateMarker(station,count,kind,label,vehicles,effectiveDays,totalDays){
     if(!station||!Number.isFinite(station.lat)||!Number.isFinite(station.lng))return null;
     const size=Math.max(14,Math.min(48,12+Math.sqrt(count)*3.2));
     const vehicleList=vehicles.slice(0,12).map(safe).join("、");
-    const popup=`<div class="popup-title">${safe(station.name)}</div><div class="popup-meta">${safe(station.code)}｜${safe(label)}</div><div class="popup-value">${fmt.format(count)} 輛</div>${vehicleList?`<div>${vehicleList}${vehicles.length>12?"…":""}</div>`:""}`;
+    const popup=`<div class="popup-title">${safe(station.name)}</div><div class="popup-meta">${safe(station.code)}｜${safe(label)}</div><div class="popup-value">非零日均 ${fmt.format(count)} 輛</div><div>有效 ${effectiveDays}/${totalDays} 日（0 不列入平均）</div>${vehicleList?`<div>${vehicleList}${vehicles.length>12?"…":""}</div>`:""}`;
     return trackingMarker(station,kind,size,popup);
   }
 
-  function renderTrackingAggregate(records){
+  function renderTrackingAggregate(records,days){
     const origins=new Map(),destinations=new Map(),reborrowed=new Map(),riding=new Map();
-    const collect=(target,station,vehicle) => {
-      const row=target.get(station.index)||{station,vehicles:[]};
-      row.vehicles.push(vehicle);
+    const collect=(target,station,vehicle,day) => {
+      const row=target.get(station.index)||{station,vehicles:new Set(),daily:new Map()};
+      row.vehicles.add(vehicle);
+      row.daily.set(day,(row.daily.get(day)||0)+1);
       target.set(station.index,row);
     };
     records.forEach((record) => {
-      collect(origins,record.origin,record.vehicle);
-      if(record.reborrowed)collect(reborrowed,record.seedDestination,record.vehicle);
-      if(record.returned)collect(destinations,record.destination,record.vehicle);
-      else if(!record.reborrowed)collect(riding,record.origin,record.vehicle);
+      collect(origins,record.origin,record.vehicle,record.day);
+      if(record.reborrowed)collect(reborrowed,record.seedDestination,record.vehicle,record.day);
+      if(record.returned)collect(destinations,record.destination,record.vehicle,record.day);
+      else if(!record.reborrowed)collect(riding,record.origin,record.vehicle,record.day);
     });
-    origins.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"origin","臺大借出站",row.vehicles));
-    destinations.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"destination","截至時間最後還車點",row.vehicles));
-    reborrowed.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"reborrowed","還車後再次借出",row.vehicles));
-    riding.forEach((row) => addAggregateMarker(row.station,row.vehicles.length,"riding","截至時間仍在騎乘",row.vehicles));
+    const summaries=[];
+    const draw=(target,kind,label) => target.forEach((row) => {
+      const metric=positiveAverage(days.map((day) => row.daily.get(day)||0));
+      const vehicles=[...row.vehicles];
+      const marker=addAggregateMarker(row.station,metric.average,kind,label,vehicles,metric.effectiveDays,days.length);
+      summaries.push({...row,kind,label,average:metric.average,effectiveDays:metric.effectiveDays,marker});
+    });
+    draw(origins,"origin","臺大借出站");
+    draw(destinations,"destination","截至時間最後還車點");
+    draw(reborrowed,"reborrowed","還車後再次借出");
+    draw(riding,"riding","截至時間仍在騎乘");
+    return summaries.sort((a,b) => b.average-a.average||a.station.name.localeCompare(b.station.name,"zh-Hant"));
   }
 
-  function renderTrackingRoutes(records,day){
+  function renderTrackingRoutes(records){
     records.forEach((record) => {
       let line=null,secondLine=null;
       const hasOrigin=Number.isFinite(record.origin.lat)&&Number.isFinite(record.origin.lng);
       const hasSeedDestination=Number.isFinite(record.seedDestination.lat)&&Number.isFinite(record.seedDestination.lng);
       const hasFinalDestination=record.reborrowReturned&&record.reborrowDestination&&Number.isFinite(record.reborrowDestination.lat)&&Number.isFinite(record.reborrowDestination.lng);
       if(record.seedReturned&&hasOrigin&&hasSeedDestination){
-        line=L.polyline([[record.origin.lat,record.origin.lng],[record.seedDestination.lat,record.seedDestination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:TRACE_COLOR,weight:4,opacity:.76,lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record,day));
+        line=L.polyline([[record.origin.lat,record.origin.lng],[record.seedDestination.lat,record.seedDestination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:TRACE_COLOR,weight:4,opacity:.76,lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record));
         state.layers.push(line);
       }
       if(record.reborrowReturned&&hasSeedDestination&&hasFinalDestination){
-        secondLine=L.polyline([[record.seedDestination.lat,record.seedDestination.lng],[record.reborrowDestination.lat,record.reborrowDestination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:RIDING_COLOR,weight:4,opacity:.82,dashArray:"9 7",lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record,day));
+        secondLine=L.polyline([[record.seedDestination.lat,record.seedDestination.lng],[record.reborrowDestination.lat,record.reborrowDestination.lng]],{renderer:trackingRenderer,pane:"trackingPane",color:RIDING_COLOR,weight:4,opacity:.82,dashArray:"9 7",lineCap:"round"}).addTo(map).bindPopup(trackingPopup(record));
         state.layers.push(secondLine);
       }
       let origin=null;
       if(hasOrigin){
-        origin=trackingMarker(record.origin,record.seedReturned?"origin":"riding",16,trackingPopup(record,day));
+        origin=trackingMarker(record.origin,record.seedReturned?"origin":"riding",16,trackingPopup(record));
       }
       if(record.seedReturned&&hasSeedDestination){
-        trackingMarker(record.seedDestination,record.reborrowed?"reborrowed":"destination",16,trackingPopup(record,day));
+        trackingMarker(record.seedDestination,record.reborrowed?"reborrowed":"destination",16,trackingPopup(record));
       }
       if(record.reborrowReturned&&hasFinalDestination){
-        trackingMarker(record.reborrowDestination,"destination",16,trackingPopup(record,day));
+        trackingMarker(record.reborrowDestination,"destination",16,trackingPopup(record));
       }
       record.line=line;
       record.secondLine=secondLine;
@@ -450,50 +528,81 @@
     else map.setView([25.0183,121.5395],14);
   }
 
+  function trackingMetric(records,days,predicate=() => true){
+    const counts=new Map(days.map((day) => [day,0]));
+    records.forEach((record) => {
+      if(predicate(record))counts.set(record.day,(counts.get(record.day)||0)+1);
+    });
+    return positiveAverage(days.map((day) => counts.get(day)||0));
+  }
+
+  function trackingAggregateRowHtml(row,index,totalDays){
+    return `<tr data-index="${index}"><td><span class="vehicle-id">${safe(row.label)}</span><span class="vehicle-meta">有效 ${row.effectiveDays}/${totalDays} 日</span></td><td class="route-name">${safe(row.station.name)}<br><small>${safe(row.station.code)}</small><b class="tracking-average">非零日均 ${fmt.format(row.average)} 輛</b></td></tr>`;
+  }
+
   async function refreshTracking(){
     if(state.mode!=="tracking")return;
     if(!trackingManifest||!trackingPeriods.length){showTrackingEmpty("目前沒有 2026 年車號追蹤資料");return;}
-    const day=$("trackingDate").value;
-    if(!day){showTrackingEmpty("請選擇日期");return;}
+    const days=selectedTrackingDates();
+    const hours=selectedTrackingHours();
+    if(!days.length){showTrackingEmpty("請至少選擇一個日期");return;}
+    if(!hours.length){showTrackingEmpty("請至少選擇一個時段");return;}
     const token=++state.loadToken;
-    startLoading("載入車號追蹤資料…");
+    startLoading(`載入 ${days.length} 日車號追蹤資料…`);
     try{
-      await ensureTrackingDay(day);
+      await Promise.all(days.map(ensureTrackingDay));
     }catch(error){
       if(token===state.loadToken)showTrackingEmpty(error.message);
       return;
     }
     if(token!==state.loadToken||state.mode!=="tracking")return;
-    const shard=window.NTU_VEHICLE_TRACKING_SHARDS[day];
     const cutoff=cutoffMinute();
+    const hourSet=new Set(hours);
     const vehicleQuery=norm($("vehicleSearch").value);
     const stationQuery=norm($("trackingStationSearch").value);
-    let records=trackingRecords(shard,cutoff).filter((record) => {
+    let records=days.flatMap((day) => trackingRecords(window.NTU_VEHICLE_TRACKING_SHARDS[day],cutoff,hourSet,day)).filter((record) => {
       if(vehicleQuery&&!norm(record.vehicle).includes(vehicleQuery))return false;
       if(stationQuery&&![record.origin,record.seedDestination,record.reborrowDestination].filter(Boolean).some((station) => station.search.includes(stationQuery)))return false;
       return true;
     });
-    records.sort((a,b) => b.activityMinute-a.activityMinute||a.vehicle.localeCompare(b.vehicle,"zh-Hant"));
+    records.sort((a,b) => b.day.localeCompare(a.day)||b.activityMinute-a.activityMinute||a.vehicle.localeCompare(b.vehicle,"zh-Hant"));
     clearMap();
-    if(vehicleQuery)renderTrackingRoutes(records,day);
-    else renderTrackingAggregate(records);
+    let aggregateRows=[];
+    if(vehicleQuery)renderTrackingRoutes(records);
+    else aggregateRows=renderTrackingAggregate(records,days);
     fitTracking(records);
-    renderTrackingSide(records,day,cutoff,Boolean(vehicleQuery));
+    renderTrackingSide(records,days,cutoff,Boolean(vehicleQuery),aggregateRows);
     stopLoading();
     if(!records.length)showMapMessage("沒有符合目前條件的臺大出發車輛");
   }
 
-  function renderTrackingSide(records,day,cutoff,isVehicleSearch){
-    const returned=records.filter((record) => record.returned).length;
-    const riding=records.length-returned;
-    const reborrowed=records.filter((record) => record.reborrowed).length;
-    $("vehicleCount").textContent=fmt.format(records.length);
-    $("vehicleKpi").textContent=fmt.format(records.length);
-    $("returnedKpi").textContent=fmt.format(returned);
-    $("ridingKpi").textContent=fmt.format(riding);
-    $("trackingStatusText").textContent=`${day}｜截至 ${minuteLabel(cutoff)}｜再次借出 ${fmt.format(reborrowed)} 輛｜${isVehicleSearch?"個別路線":"站點彙總"}`;
-    $("trackingRows").innerHTML=records.slice(0,250).map(trackingRowHtml).join("")||'<tr><td colspan="2">沒有符合條件的車輛</td></tr>';
+  function renderTrackingSide(records,days,cutoff,isVehicleSearch,aggregateRows){
+    const vehicles=trackingMetric(records,days);
+    const returned=trackingMetric(records,days,(record) => record.returned);
+    const riding=trackingMetric(records,days,(record) => !record.returned);
+    const reborrowed=trackingMetric(records,days,(record) => record.reborrowed);
+    $("vehicleCount").textContent=fmt.format(vehicles.average);
+    $("vehicleKpi").textContent=fmt.format(vehicles.average);
+    $("returnedKpi").textContent=fmt.format(returned.average);
+    $("ridingKpi").textContent=fmt.format(riding.average);
+    const dateText=days.length===1?days[0]:`${days[0]}～${days.at(-1)}（選 ${days.length} 日）`;
+    $("trackingStatusText").textContent=`${dateText}｜借出 ${compactHourLabel(selectedTrackingHours())}｜截至 ${minuteLabel(cutoff)}｜再次借出非零日均 ${fmt.format(reborrowed.average)} 輛`;
+    $("trackingFirstHeader").textContent=isVehicleSearch?"日期／車號／時間":"狀態／有效日";
+    $("trackingSecondHeader").textContent=isVehicleSearch?"臺大出發 → 最後還車":"站點／非零日均";
+    $("trackingNote").textContent=isVehicleSearch
+      ? "清單保留每個選定日期的實際行程；點選可定位臺大出發站與最後還車點。"
+      : "站點數字為所選日期中有數值日期的平均；0 不列入分母。";
+    const rows=isVehicleSearch?records:aggregateRows;
+    $("trackingRows").innerHTML=(isVehicleSearch
+      ? rows.slice(0,250).map(trackingRowHtml)
+      : rows.slice(0,250).map((row,index) => trackingAggregateRowHtml(row,index,days.length))
+    ).join("")||'<tr><td colspan="2">沒有符合條件的車輛</td></tr>';
     [...$("trackingRows").querySelectorAll("tr[data-index]")].forEach((row) => row.addEventListener("click",() => {
+      if(!isVehicleSearch){
+        const summary=aggregateRows[Number(row.dataset.index)];
+        if(summary?.marker){map.setView([summary.station.lat,summary.station.lng],16);summary.marker.openPopup();}
+        return;
+      }
       const record=records[Number(row.dataset.index)];
       const points=trackingPoints(record);
       if(points.length>1){map.fitBounds(L.latLngBounds(points),{padding:[80,80],maxZoom:17});(record.secondLine||record.line)?.openPopup();}
@@ -520,9 +629,10 @@
   function updateTrackingDates(preferred){
     const period=trackingPeriod();
     const dates=period?.dates||[];
-    $("trackingDate").innerHTML="";
-    dates.forEach((day) => $("trackingDate").add(new Option(day,day)));
-    $("trackingDate").value=dates.includes(preferred)?preferred:(dates.at(-1)||"");
+    const chosen=Array.isArray(preferred)?preferred.filter((day) => dates.includes(day)):dates;
+    $("trackingDateOptions").innerHTML=dates.map((day) => `<label><input type="checkbox" name="trackingDate" value="${safe(day)}" ${chosen.includes(day)?"checked":""}><span>${safe(day)}</span></label>`).join("");
+    document.querySelectorAll('input[name="trackingDate"]').forEach((node) => node.addEventListener("change",() => {updateTrackingDateSummary();debouncedTrackingRefresh();}));
+    updateTrackingDateSummary();
   }
 
   function initializeTrackingControls(){
@@ -536,7 +646,7 @@
     });
     const latest=trackingPeriods.at(-1);
     $("trackingPeriod").value=latest?.period||"";
-    updateTrackingDates(latest?.dates?.at(-1));
+    updateTrackingDates();
   }
 
   function setMode(mode){
@@ -568,13 +678,22 @@
   }
 
   const debouncedRouteRefresh=debounce(refreshRoutes,100);
+  const debouncedTrackingRefresh=debounce(refreshTracking,120);
   document.querySelectorAll('input[name="year"],input[name="month"],#categorySelect').forEach((node) => node.addEventListener("change",refreshRoutes));
   document.querySelectorAll('input[name="timeHour"]').forEach((node) => node.addEventListener("change",() => {updateTimeSummary();debouncedRouteRefresh();}));
   document.querySelectorAll("[data-hour-preset]").forEach((button) => button.addEventListener("click",() => {setHours(PRESETS[button.dataset.hourPreset]||[]);debouncedRouteRefresh();}));
   $("timePicker").addEventListener("toggle",positionTimeMenu);
-  window.addEventListener("resize",positionTimeMenu);
+  $("trackingDatePicker").addEventListener("toggle",positionTrackingMenus);
+  $("trackingTimePicker").addEventListener("toggle",positionTrackingMenus);
+  window.addEventListener("resize",() => {positionTimeMenu();positionTrackingMenus();});
   $("routeControls").addEventListener("scroll",positionTimeMenu);
-  document.addEventListener("click",(event) => {if($("timePicker").open&&!$("timePicker").contains(event.target))$("timePicker").open=false;});
+  $("trackingControls").addEventListener("scroll",positionTrackingMenus);
+  document.addEventListener("click",(event) => {
+    ["timePicker","trackingDatePicker","trackingTimePicker"].forEach((id) => {
+      const picker=$(id);
+      if(picker.open&&!picker.contains(event.target))picker.open=false;
+    });
+  });
   $("minAverage").addEventListener("input",() => {$("minLabel").textContent=Number($("minAverage").value).toFixed(1);debouncedRouteRefresh();});
   $("stationSearch").addEventListener("input",debounce(refreshRoutes,240));
   $("resetButton").addEventListener("click",() => {
@@ -593,7 +712,16 @@
   $("routeModeButton").addEventListener("click",() => setMode("route"));
   $("trackingModeButton").addEventListener("click",() => setMode("tracking"));
   $("trackingPeriod").addEventListener("change",() => {updateTrackingDates();refreshTracking();});
-  $("trackingDate").addEventListener("change",refreshTracking);
+  document.querySelectorAll('input[name="trackingTimeHour"]').forEach((node) => node.addEventListener("change",() => {updateTrackingTimeSummary();debouncedTrackingRefresh();}));
+  document.querySelectorAll("[data-tracking-hour-preset]").forEach((button) => button.addEventListener("click",() => {
+    setTrackingHours(PRESETS[button.dataset.trackingHourPreset]||[]);
+    debouncedTrackingRefresh();
+  }));
+  document.querySelectorAll("[data-tracking-date-preset]").forEach((button) => button.addEventListener("click",() => {
+    const dates=trackingPeriod()?.dates||[];
+    setTrackingDates(button.dataset.trackingDatePreset==="all"?dates:[]);
+    debouncedTrackingRefresh();
+  }));
   $("trackingCutoff").addEventListener("change",refreshTracking);
   $("vehicleSearch").addEventListener("input",debounce(refreshTracking,240));
   $("trackingStationSearch").addEventListener("input",debounce(refreshTracking,240));
@@ -601,16 +729,20 @@
     if(trackingPeriods.length){
       const latest=trackingPeriods.at(-1);
       $("trackingPeriod").value=latest?.period||"";
-      updateTrackingDates(latest?.dates?.at(-1));
+      updateTrackingDates();
     }
+    setTrackingHours(PRESETS.all);
     $("trackingCutoff").value="23:59";
     $("vehicleSearch").value="";
     $("trackingStationSearch").value="";
+    $("trackingDatePicker").open=false;
+    $("trackingTimePicker").open=false;
     map.setView([25.0183,121.5395],14);
     refreshTracking();
   });
 
   updateTimeSummary();
+  updateTrackingTimeSummary();
   initializeTrackingControls();
   refreshRoutes();
 })();

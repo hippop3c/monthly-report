@@ -8,7 +8,7 @@
   <title>臺大校內外騎乘比較與車號追蹤地圖</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="app.css?v=20261028-2">
+  <link rel="stylesheet" href="app.css?v=20261029-1">
 </head>
 <body>
   <header class="topbar">
@@ -68,8 +68,35 @@
       <label><select id="trackingPeriod" aria-label="追蹤期間"></select></label>
     </fieldset>
     <fieldset class="tracking-field tracking-date-field">
-      <legend>日期</legend>
-      <label><select id="trackingDate" aria-label="追蹤日期"></select></label>
+      <legend>日期（可複選）</legend>
+      <details id="trackingDatePicker" class="time-picker">
+        <summary id="trackingDateSummary">全部日期</summary>
+        <div id="trackingDateMenu" class="time-menu tracking-date-menu">
+          <div class="time-presets" aria-label="快速選取日期">
+            <button type="button" data-tracking-date-preset="all">全選</button>
+            <button type="button" data-tracking-date-preset="clear">清除</button>
+          </div>
+          <div id="trackingDateOptions" class="date-options" aria-label="日期複選"></div>
+        </div>
+      </details>
+    </fieldset>
+    <fieldset class="tracking-field tracking-time-field">
+      <legend>借出時段（可複選）</legend>
+      <details id="trackingTimePicker" class="time-picker">
+        <summary id="trackingTimeSummary">全日（24時段）</summary>
+        <div id="trackingTimeMenu" class="time-menu">
+          <div class="time-presets" aria-label="快速選取借出時段">
+            <button type="button" data-tracking-hour-preset="all">全日</button>
+            <button type="button" data-tracking-hour-preset="6-24">6–24時</button>
+            <button type="button" data-tracking-hour-preset="7-9">7–9時</button>
+            <button type="button" data-tracking-hour-preset="11-13">11–13時</button>
+            <button type="button" data-tracking-hour-preset="16-20">16–20時</button>
+            <button type="button" data-tracking-hour-preset="21-00">21–00時</button>
+            <button type="button" data-tracking-hour-preset="clear">清除</button>
+          </div>
+          <div id="trackingHourOptions" class="hour-options" aria-label="借出時段逐時複選"></div>
+        </div>
+      </details>
     </fieldset>
     <fieldset class="tracking-field">
       <legend>截至時間</legend>
@@ -132,18 +159,18 @@
           <strong id="vehicleCount">0</strong>
         </div>
         <div class="kpis">
-          <div><span>車輛</span><b id="vehicleKpi">0</b></div>
-          <div><span>已還車</span><b id="returnedKpi">0</b></div>
-          <div><span>騎乘中</span><b id="ridingKpi">0</b></div>
+          <div><span>車輛日均</span><b id="vehicleKpi">0</b></div>
+          <div><span>已還車日均</span><b id="returnedKpi">0</b></div>
+          <div><span>騎乘中日均</span><b id="ridingKpi">0</b></div>
         </div>
         <p class="status" id="trackingStatusText">選擇日期與截至時間</p>
         <div class="table-wrap">
           <table class="tracking-table">
-            <thead><tr><th>車號／時間</th><th>臺大出發 → 最後還車</th></tr></thead>
+            <thead><tr><th id="trackingFirstHeader">狀態／有效日</th><th id="trackingSecondHeader">站點／非零日均</th></tr></thead>
             <tbody id="trackingRows"></tbody>
           </table>
         </div>
-        <p class="note">清單列出符合條件的車輛；點選可定位其臺大出發站與最後還車點。</p>
+        <p class="note" id="trackingNote">站點數字為所選日期中有數值日期的平均；0 不列入分母。</p>
       </section>
     </aside>
   </main>
@@ -151,6 +178,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="data/manifest.js?v=20261028-1"></script>
   <script src="data/tracking/manifest.js?v=20261028-2"></script>
-  <script src="app.js?v=20261028-2"></script>
+  <script src="app.js?v=20261029-1"></script>
 </body>
 </html>
