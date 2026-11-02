@@ -4,12 +4,12 @@
   const manifest = window.NTU_RIDING_MANIFEST;
   const trackingManifest = window.NTU_VEHICLE_TRACKING_MANIFEST || null;
   const COLORS = {"05":"#2563eb","09":"#16a34a","10":"#f97316"};
-  const ORIGIN_COLOR = "#06b6d4";
-  const DESTINATION_COLOR = "#e11d48";
+  const ORIGIN_COLOR = "#0da4c9";
+  const DESTINATION_COLOR = "#f36f2c";
   const RIDING_COLOR = "#f59e0b";
   const TRACE_COLOR = "#334155";
   const fmt = new Intl.NumberFormat("zh-TW", {maximumFractionDigits:1});
-  const state = {mode:"route", layers:[], markers:[], drillLayers:[], aggregateTrackingRecords:[], activeOriginIndex:null, loadToken:0};
+  const state = {mode:"route", layers:[], markers:[], drillLayers:[], aggregateTrackingRecords:[], activeOriginIndex:null, loadToken:0, selectedRouteKeys:new Set(), routeChoices:[]};
   const $ = (id) => document.getElementById(id);
   const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[character]);
   const norm = (value) => String(value ?? "").normalize("NFKC").replace(/臺/g,"台").replace(/\s+/g,"").toLowerCase();
@@ -115,6 +115,40 @@
     updateTimeSummary();
   }
 
+  function updateRouteSummary(){
+    const count=state.selectedRouteKeys.size;
+    const label=count ? `已選 ${count} 條路線` : "全部路線";
+    $("routeSummary").textContent=label;
+    $("routeSummary").title=label;
+  }
+
+  function renderRouteOptions(){
+    const query=norm($("routeOptionSearch").value);
+    const matched=state.routeChoices.filter((choice) => !query||choice.search.includes(query));
+    const shown=matched.slice(0,300);
+    $("routeOptionHint").textContent=matched.length>shown.length
+      ? `符合 ${fmt.format(matched.length)} 條，先顯示前 ${fmt.format(shown.length)} 條；可輸入站名縮小範圍`
+      : `目前 ${fmt.format(matched.length)} 條可選；可同時勾選多條路線`;
+    $("routeOptions").innerHTML=shown.map((choice) => `<label title="${safe(choice.label)}"><input type="checkbox" data-route-key="${safe(choice.key)}" ${state.selectedRouteKeys.has(choice.key)?"checked":""}><span>${safe(choice.label)}</span><small>${fmt.format(choice.average)}</small></label>`).join("")||"<p>沒有符合條件的路線</p>";
+    updateRouteSummary();
+  }
+
+  function syncRouteChoices(routes){
+    const grouped=new Map();
+    routes.forEach((route) => {
+      const current=grouped.get(route.routeKey)||{
+        key:route.routeKey,
+        label:`${route.origin.name}（${route.origin.code}） → ${route.destination.name}（${route.destination.code}）`,
+        search:route.routeSearch,
+        average:0
+      };
+      current.average+=route.average;
+      grouped.set(route.routeKey,current);
+    });
+    state.routeChoices=[...grouped.values()].sort((a,b) => b.average-a.average||a.label.localeCompare(b.label,"zh-Hant"));
+    renderRouteOptions();
+  }
+
   function updateTrackingTimeSummary(){
     const hours=selectedTrackingHours();
     const label=compactHourLabel(hours);
@@ -161,6 +195,7 @@
   }
 
   function positionTimeMenu(){positionPickerMenu("timePicker","timeMenu",590);}
+  function positionRouteMenu(){positionPickerMenu("routePicker","routeMenu",680);}
   function positionTrackingMenus(){
     positionPickerMenu("trackingDatePicker","trackingDateMenu",430);
     positionPickerMenu("trackingTimePicker","trackingTimeMenu",590);
@@ -224,9 +259,11 @@
     $("mapMessage").classList.remove("hidden");
   }
 
-  function offsetPair(a,b,year){
+  function offsetPair(a,b,year,month){
     const dx=b.lng-a.lng,dy=b.lat-a.lat,length=Math.hypot(dx,dy)||1;
-    const sign=year===2025?-1:1,amount=0.000018*sign;
+    const yearOffset=year===2025?-1.4:1.4;
+    const monthOffset=({"05":-0.65,"09":0,"10":0.65})[month]||0;
+    const amount=0.000013*(yearOffset+monthOffset);
     const ox=(-dy/length)*amount,oy=(dx/length)*amount;
     return [[a.lat+oy,a.lng+ox],[b.lat+oy,b.lng+ox]];
   }
@@ -239,7 +276,8 @@
     const origin=stations[raw[0]],destination=stations[raw[1]],categoryIndex=raw[2],sampleDays=periodMeta[period].sample_days;
     const hourOffset=3+manifest.bands.length*4;
     const total=hours.reduce((sum,hour) => sum+Number(raw[hourOffset+hour]||0),0),average=total/sampleDays;
-    return {period,year:Number(period.slice(0,4)),month:period.slice(5),origin,destination,categoryIndex,category:manifest.categories[categoryIndex],total,average,sampleDays};
+    const routeKey=`${origin.code}|${destination.code}`;
+    return {period,year:Number(period.slice(0,4)),month:period.slice(5),origin,destination,categoryIndex,category:manifest.categories[categoryIndex],routeKey,routeSearch:norm(`${origin.code} ${origin.name} ${destination.code} ${destination.name}`),total,average,sampleDays};
   }
 
   function popupHtml(route){
@@ -288,19 +326,23 @@
     const category=$("categorySelect").value;
     const query=norm($("stationSearch").value);
     const minimum=Number($("minAverage").value);
-    const routes=[];
+    const candidateRoutes=[];
     periods.forEach((period) => window.NTU_RIDING_SHARDS[period].routes.forEach((raw) => {
       const route=routeObject(period,raw,hours);
       if(route.average<minimum)return;
       if(category!=="all"&&route.categoryIndex!==Number(category))return;
       if(query&&!route.origin.search.includes(query)&&!route.destination.search.includes(query))return;
       if(!Number.isFinite(route.origin.lat)||!Number.isFinite(route.destination.lat))return;
-      routes.push(route);
+      candidateRoutes.push(route);
     }));
+    syncRouteChoices(candidateRoutes);
+    const routes=state.selectedRouteKeys.size
+      ? candidateRoutes.filter((route) => state.selectedRouteKeys.has(route.routeKey))
+      : candidateRoutes;
     routes.sort((a,b) => b.average-a.average);
     clearMap();
     routes.forEach((route) => {
-      const coords=offsetPair(route.origin,route.destination,route.year);
+      const coords=offsetPair(route.origin,route.destination,route.year,route.month);
       const baseWeight=Math.max(1.2,Math.min(9,1+Math.sqrt(route.average)*0.9));
       const layer=L.polyline(coords,{renderer,color:COLORS[route.month],weight:baseWeight,opacity:.65,dashArray:route.year===2025?"10 7":null,lineCap:"round"}).addTo(map);
       layer.bindPopup(popupHtml(route));
@@ -317,6 +359,9 @@
       });
     }
     renderRouteSide(routes,periods);
+    if(state.selectedRouteKeys.size&&state.layers.length){
+      map.fitBounds(L.featureGroup(state.layers).getBounds(),{padding:[70,70],maxZoom:15});
+    }
     stopLoading();
   }
 
@@ -325,7 +370,8 @@
     $("routeKpi").textContent=fmt.format(routes.length);
     $("averageKpi").textContent=fmt.format(routes.reduce((sum,row) => sum+row.average,0));
     $("sampleKpi").textContent=periods.map((period) => `${period}:${periodMeta[period].sample_days}`).join("｜");
-    $("statusText").textContent=`${currentTimeLabel()}｜最低日均 ${Number($("minAverage").value).toFixed(1)} 次`;
+    const routeFilter=state.selectedRouteKeys.size ? `｜已選 ${state.selectedRouteKeys.size} 條路線` : "";
+    $("statusText").textContent=`${currentTimeLabel()}｜最低日均 ${Number($("minAverage").value).toFixed(1)} 次${routeFilter}`;
     $("routeRows").innerHTML=routes.slice(0,80).map(rowHtml).join("")||'<tr><td colspan="3">沒有符合條件的路線</td></tr>';
     [...$("routeRows").querySelectorAll("tr[data-index]")].forEach((row) => row.addEventListener("click",() => {
       const route=routes[Number(row.dataset.index)];
@@ -336,6 +382,8 @@
 
   function showRouteEmpty(message){
     clearMap();
+    state.routeChoices=[];
+    renderRouteOptions();
     stopLoading();
     showMapMessage(message);
     $("routeRows").innerHTML="";
@@ -763,22 +811,95 @@
     return (...args) => {clearTimeout(timer);timer=setTimeout(() => fn(...args),delay);};
   }
 
+  const mainLayout=document.querySelector("main");
+  const resultSidebar=$("resultSidebar");
+  const sidebarResizer=$("sidebarResizer");
+  function sidebarWidthLimits(){
+    return {minimum:240,maximum:Math.max(240,Math.min(620,Math.round(window.innerWidth*0.52)))};
+  }
+  function setSidebarWidth(width,persist=false){
+    const {minimum,maximum}=sidebarWidthLimits();
+    const next=Math.max(minimum,Math.min(maximum,Math.round(Number(width)||285)));
+    mainLayout.style.setProperty("--sidebar-width",`${next}px`);
+    sidebarResizer.setAttribute("aria-valuenow",String(next));
+    if(persist){
+      try{localStorage.setItem("ntu-riding-sidebar-width",String(next));}catch(_error){}
+    }
+    requestAnimationFrame(() => map.invalidateSize({pan:false}));
+    return next;
+  }
+  let initialSidebarWidth=285;
+  try{
+    const savedWidth=Number(localStorage.getItem("ntu-riding-sidebar-width"));
+    if(Number.isFinite(savedWidth)&&savedWidth>0)initialSidebarWidth=savedWidth;
+  }catch(_error){}
+  setSidebarWidth(initialSidebarWidth,false);
+  sidebarResizer.addEventListener("pointerdown",(event) => {
+    if(event.button!==0)return;
+    event.preventDefault();
+    const startX=event.clientX;
+    const startWidth=resultSidebar.getBoundingClientRect().width;
+    sidebarResizer.classList.add("dragging");
+    document.body.classList.add("resizing-sidebar");
+    sidebarResizer.setPointerCapture(event.pointerId);
+    const move=(moveEvent) => setSidebarWidth(startWidth+startX-moveEvent.clientX,false);
+    const finish=(finishEvent) => {
+      if(finishEvent.pointerId!==event.pointerId)return;
+      sidebarResizer.removeEventListener("pointermove",move);
+      sidebarResizer.removeEventListener("pointerup",finish);
+      sidebarResizer.removeEventListener("pointercancel",finish);
+      sidebarResizer.classList.remove("dragging");
+      document.body.classList.remove("resizing-sidebar");
+      setSidebarWidth(resultSidebar.getBoundingClientRect().width,true);
+    };
+    sidebarResizer.addEventListener("pointermove",move);
+    sidebarResizer.addEventListener("pointerup",finish);
+    sidebarResizer.addEventListener("pointercancel",finish);
+  });
+  sidebarResizer.addEventListener("keydown",(event) => {
+    if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
+    event.preventDefault();
+    const delta=event.key==="ArrowLeft"?20:-20;
+    setSidebarWidth(resultSidebar.getBoundingClientRect().width+delta,true);
+  });
+
   const debouncedRouteRefresh=debounce(refreshRoutes,100);
   const debouncedTrackingRefresh=debounce(refreshTracking,120);
   document.querySelectorAll('input[name="year"],input[name="month"],#categorySelect').forEach((node) => node.addEventListener("change",refreshRoutes));
   document.querySelectorAll('input[name="timeHour"]').forEach((node) => node.addEventListener("change",() => {updateTimeSummary();debouncedRouteRefresh();}));
   document.querySelectorAll("[data-hour-preset]").forEach((button) => button.addEventListener("click",() => {setHours(PRESETS[button.dataset.hourPreset]||[]);debouncedRouteRefresh();}));
   $("timePicker").addEventListener("toggle",positionTimeMenu);
+  $("routePicker").addEventListener("toggle",positionRouteMenu);
   $("trackingDatePicker").addEventListener("toggle",positionTrackingMenus);
   $("trackingTimePicker").addEventListener("toggle",positionTrackingMenus);
-  window.addEventListener("resize",() => {positionTimeMenu();positionTrackingMenus();});
-  $("routeControls").addEventListener("scroll",positionTimeMenu);
+  window.addEventListener("resize",() => {
+    positionTimeMenu();
+    positionRouteMenu();
+    positionTrackingMenus();
+    if(window.innerWidth>1000)setSidebarWidth(resultSidebar.getBoundingClientRect().width,false);
+    else map.invalidateSize({pan:false});
+  });
+  $("routeControls").addEventListener("scroll",() => {positionTimeMenu();positionRouteMenu();});
   $("trackingControls").addEventListener("scroll",positionTrackingMenus);
   document.addEventListener("click",(event) => {
-    ["timePicker","trackingDatePicker","trackingTimePicker"].forEach((id) => {
+    ["timePicker","routePicker","trackingDatePicker","trackingTimePicker"].forEach((id) => {
       const picker=$(id);
       if(picker.open&&!picker.contains(event.target))picker.open=false;
     });
+  });
+  $("routeOptionSearch").addEventListener("input",debounce(renderRouteOptions,100));
+  $("routeOptions").addEventListener("change",(event) => {
+    const checkbox=event.target.closest('input[data-route-key]');
+    if(!checkbox)return;
+    if(checkbox.checked)state.selectedRouteKeys.add(checkbox.dataset.routeKey);
+    else state.selectedRouteKeys.delete(checkbox.dataset.routeKey);
+    updateRouteSummary();
+    debouncedRouteRefresh();
+  });
+  $("clearRouteSelection").addEventListener("click",() => {
+    state.selectedRouteKeys.clear();
+    renderRouteOptions();
+    debouncedRouteRefresh();
   });
   $("minAverage").addEventListener("input",() => {$("minLabel").textContent=Number($("minAverage").value).toFixed(1);debouncedRouteRefresh();});
   $("stationSearch").addEventListener("input",debounce(refreshRoutes,240));
@@ -787,10 +908,13 @@
     document.querySelectorAll('input[name="month"]').forEach((node) => node.checked=node.value==="05");
     setHours(PRESETS.all);
     $("categorySelect").value="all";
+    state.selectedRouteKeys.clear();
+    $("routeOptionSearch").value="";
     $("stationSearch").value="";
     $("minAverage").value="1";
     $("minLabel").textContent="1.0";
     $("timePicker").open=false;
+    $("routePicker").open=false;
     map.setView([25.0183,121.5395],14);
     refreshRoutes();
   });
@@ -829,6 +953,7 @@
   });
 
   updateTimeSummary();
+  updateRouteSummary();
   updateTrackingTimeSummary();
   initializeTrackingControls();
   refreshRoutes();
