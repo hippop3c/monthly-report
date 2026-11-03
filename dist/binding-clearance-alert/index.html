@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#173f61" />
+    <meta
+      name="description"
+      content="顯示連續至少兩天每日最低綁車數未歸零的雙北場站。"
+    />
+    <title>雙北閒置綁車監控</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead__content">
+        <div>
+          <p class="eyebrow">YOUBIKE OPERATIONS</p>
+          <h1>雙北閒置綁車監控</h1>
+          <p class="subtitle">連續至少 2 天，每日最低綁車數仍未歸零</p>
+        </div>
+        <div class="updated" aria-label="資料更新日期">
+          <span>資料更新至</span>
+          <strong id="updatedDate">—</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="toolbar" aria-label="篩選條件">
+        <div class="toolbar__group toolbar__group--date">
+          <button class="icon-button" id="previousDate" type="button" aria-label="前一天">‹</button>
+          <label>
+            <span>監控日期</span>
+            <select id="dateFilter"></select>
+          </label>
+          <button class="icon-button" id="nextDate" type="button" aria-label="後一天">›</button>
+        </div>
+
+        <fieldset class="city-toggle" aria-label="城市">
+          <legend>城市</legend>
+          <button class="segmented is-active" data-city="全部" type="button">全部</button>
+          <button class="segmented" data-city="台北市" type="button">台北</button>
+          <button class="segmented" data-city="新北市" type="button">新北</button>
+        </fieldset>
+
+        <label>
+          <span>責任區</span>
+          <select id="areaFilter">
+            <option value="全部">全部責任區</option>
+          </select>
+        </label>
+
+        <label class="search-box">
+          <span>搜尋場站</span>
+          <input id="searchInput" type="search" placeholder="輸入站名或代碼" autocomplete="off" />
+        </label>
+
+        <label>
+          <span>排序</span>
+          <select id="sortFilter">
+            <option value="count-desc">閒置綁車數：高到低</option>
+            <option value="streak-desc">連續天數：長到短</option>
+            <option value="area-asc">責任區</option>
+            <option value="station-asc">場站名稱</option>
+          </select>
+        </label>
+
+        <button id="resetButton" class="reset-button" type="button">重設</button>
+      </section>
+
+      <section class="metrics" aria-label="監控摘要">
+        <article class="metric-card metric-card--alert">
+          <span>警示場站</span>
+          <strong id="stationCount">—</strong>
+          <small>站</small>
+        </article>
+        <article class="metric-card">
+          <span>閒置綁車數</span>
+          <strong id="bindingTotal">—</strong>
+          <small>輛</small>
+        </article>
+        <article class="metric-card">
+          <span>最長未清零</span>
+          <strong id="longestStreak">—</strong>
+          <small>天</small>
+        </article>
+        <article class="metric-card">
+          <span>涉及責任區</span>
+          <strong id="areaCount">—</strong>
+          <small>區</small>
+        </article>
+      </section>
+
+      <section class="results-panel">
+        <div class="results-heading">
+          <div>
+            <h2>需處理場站</h2>
+            <p id="resultSummary">—</p>
+          </div>
+          <div class="legend" aria-label="數量顏色說明">
+            <span><i class="dot dot--low"></i>1–4 輛</span>
+            <span><i class="dot dot--medium"></i>5–9 輛</span>
+            <span><i class="dot dot--high"></i>10 輛以上</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>城市</th>
+                <th>責任區</th>
+                <th>場站</th>
+                <th class="number-column">閒置綁車數</th>
+                <th class="number-column">連續天數</th>
+                <th>最近 7 日每日最低綁車</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+
+        <div id="emptyState" class="empty-state" hidden>
+          <div class="empty-state__icon">✓</div>
+          <h3>沒有符合條件的場站</h3>
+          <p>目前篩選範圍內，沒有連續 2 天最低綁車數未歸零的場站。</p>
+        </div>
+      </section>
+    </main>
+
+    <template id="rowTemplate">
+      <tr class="station-row">
+        <td data-label="城市"><span class="city-badge"></span></td>
+        <td data-label="責任區"><strong class="area-name"></strong></td>
+        <td data-label="場站">
+          <div class="station-name"></div>
+          <code class="station-code"></code>
+        </td>
+        <td data-label="閒置綁車數" class="number-column">
+          <span class="count-badge"></span>
+        </td>
+        <td data-label="連續天數" class="number-column">
+          <strong class="streak-days"></strong>
+          <small class="streak-start"></small>
+        </td>
+        <td data-label="最近 7 日每日最低綁車">
+          <div class="history-strip"></div>
+        </td>
+      </tr>
+    </template>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
