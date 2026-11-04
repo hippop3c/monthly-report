@@ -87,7 +87,7 @@ $verifyUrl = 'https://hippop3c.github.io/monthly-report/binding-clearance-alert/
 $verified = $false
 for ($attempt = 1; $attempt -le 20; $attempt++) {
     try {
-        $online = Invoke-RestMethod -Uri "$verifyUrl?t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 30
+        $online = Invoke-RestMethod -Uri "${verifyUrl}?t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 30
         if ($online.meta.sourceEnd -eq $TargetDate) {
             $verified = $true
             break
