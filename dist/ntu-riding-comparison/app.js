@@ -59,19 +59,25 @@
     const rows=window.NTU_RETURN_HOTSPOTS||[];
     rows.forEach((row) => {
       if(!Number.isFinite(Number(row.lat))||!Number.isFinite(Number(row.lng)))return;
-      const radius=Math.max(6,Math.min(12,5+Math.sqrt(Number(row.dailyAverage)||0)*0.35));
+      const radius=Math.max(10,Math.min(16,9+Math.sqrt(Number(row.dailyAverage)||0)*0.28));
+      L.circleMarker([Number(row.lat),Number(row.lng)],{
+        renderer:hotspotRenderer,
+        pane:"hotspotPane",
+        radius:radius+1,
+        color:"#ffffff",
+        weight:6,
+        fill:false,
+        interactive:false,
+      }).addTo(hotspotLayer);
       L.circleMarker([Number(row.lat),Number(row.lng)],{
         renderer:hotspotRenderer,
         pane:"hotspotPane",
         radius,
-        color:"#ffffff",
-        weight:2.5,
-        fillColor:"#dc2626",
-        fillOpacity:.96,
-      }).bindTooltip(
-        `<b>${safe(row.area)}區第${safe(row.rank)}名｜${safe(row.name)}</b><br>${safe(row.code)}｜16–20時還入 ${fmt.format(row.dailyAverage)} 輛／日`,
-        {direction:"top",offset:[0,-6]},
-      ).addTo(hotspotLayer);
+        color:"#dc2626",
+        weight:3,
+        fill:false,
+        interactive:false,
+      }).addTo(hotspotLayer);
     });
   }
   renderReturnHotspots();
