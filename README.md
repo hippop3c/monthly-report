@@ -68,3 +68,5 @@ VDS 任務來源與全責任區績效比較請下載 [Excel](https://hippop3c.gi
 臺大校內外騎乘年度比較與車號追蹤地圖位於 `dist/ntu-riding-comparison/index.html`；Excel 請下載 `dist/files/臺大校內外騎乘_2025與2026年5月9月10月比較.xlsx`。
 
 臺大 15 點校內車輛逐時流向與車號追蹤統計請下載 `dist/files/臺大15點校內車輛逐時流向_2026年10月_車號追蹤統計版.xlsx`。
+
+A級站點各狀態重複天數清單請下載 `dist/files/A級站點各狀態重複天數清單.xlsx`；同一場站、同一狀態於同一天跨時段只計 1 天，僅列重複 2 天以上。
