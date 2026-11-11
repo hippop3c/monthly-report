@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1728">
+  <meta name="description" content="雙北 YouBike 場站與大貨車限制路段、時段互動地圖">
+  <title>雙北場站 × 大貨車管制地圖</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynWPw5ctHzqDZsHCJbJk9n2o2Dk0=" crossorigin="">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">雙北</div>
+      <div>
+        <h1>場站 × 大貨車管制地圖</h1>
+        <p>官方場站、禁行區、禁行路線與時段一次查詢</p>
+      </div>
+    </div>
+    <div class="headline-stats" aria-label="資料統計">
+      <div><strong id="stationTotal">—</strong><span>場站</span></div>
+      <div><strong id="restrictionTotal">—</strong><span>限制清單</span></div>
+      <div><strong id="geometryTotal">—</strong><span>官方幾何</span></div>
+    </div>
+    <button id="mobilePanelButton" class="mobile-panel-button" type="button" aria-controls="sidebar" aria-expanded="false">篩選與清單</button>
+  </header>
+
+  <main class="workspace">
+    <aside id="sidebar" class="sidebar" aria-label="篩選與限制清單">
+      <div class="sidebar-scroll">
+        <section class="notice-card">
+          <div class="notice-icon">!</div>
+          <div>
+            <strong>行前規劃輔助</strong>
+            <p>實際管制以現場標誌及主管機關最新公告為準。臺北逐路段圖釘為約略定位，法定路段以卡片原文為準。</p>
+          </div>
+        </section>
+
+        <section class="filters" aria-labelledby="filterTitle">
+          <div class="section-heading">
+            <h2 id="filterTitle">篩選</h2>
+            <button id="resetFilters" class="text-button" type="button">全部重設</button>
+          </div>
+          <label class="search-box">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="searchInput" type="search" placeholder="搜尋場站、道路、行政區…" autocomplete="off">
+          </label>
+
+          <div class="filter-grid">
+            <label>縣市
+              <select id="cityFilter">
+                <option value="all">雙北全部</option>
+                <option value="臺北市">臺北市</option>
+                <option value="新北市">新北市</option>
+              </select>
+            </label>
+            <label>行政區
+              <select id="districtFilter"><option value="all">全部行政區</option></select>
+            </label>
+            <label>路線類型
+              <select id="routeFilter">
+                <option value="all">全部</option>
+                <option value="restricted_route">禁行路線</option>
+                <option value="restricted_area">禁行區域</option>
+                <option value="permitted">可行駛路線</option>
+              </select>
+            </label>
+            <label>噸位門檻
+              <select id="weightFilter">
+                <option value="all">全部</option>
+                <option value="3.5">3.5 噸</option>
+                <option value="5">5 噸</option>
+                <option value="6.5">6.5 噸</option>
+                <option value="10">10 噸</option>
+                <option value="10.5">10.5 噸</option>
+                <option value="15">15 噸</option>
+                <option value="18">18 噸</option>
+                <option value="20">20 噸</option>
+                <option value="unspecified">未標示</option>
+              </select>
+            </label>
+            <label>時段類型
+              <select id="timeFilter">
+                <option value="all">全部</option>
+                <option value="all_day">全日管制</option>
+                <option value="timed">時段管制</option>
+                <option value="hour">指定時刻</option>
+              </select>
+            </label>
+            <label id="hourField" class="hour-field is-hidden">指定時刻
+              <select id="hourFilter"></select>
+            </label>
+          </div>
+
+          <fieldset class="layer-switches">
+            <legend>圖層</legend>
+            <label><input id="showStations" type="checkbox" checked><span class="dot station-dot"></span>YouBike 場站</label>
+            <label><input id="showRestrictions" type="checkbox" checked><span class="dot restricted-dot"></span>禁行路線／區域</label>
+            <label><input id="showPermitted" type="checkbox" checked><span class="line permitted-line"></span>可行駛路線</label>
+          </fieldset>
+        </section>
+
+        <section class="results" aria-labelledby="resultTitle">
+          <div class="section-heading result-heading">
+            <div>
+              <h2 id="resultTitle">限制清單</h2>
+              <p id="resultSummary">資料載入中…</p>
+            </div>
+            <button id="fitResults" class="icon-button" type="button" title="縮放至篩選結果" aria-label="縮放至篩選結果">◎</button>
+          </div>
+          <div id="restrictionList" class="restriction-list" aria-live="polite"></div>
+          <button id="loadMore" class="load-more is-hidden" type="button">顯示更多</button>
+        </section>
+
+        <details class="sources">
+          <summary>資料來源與圖例</summary>
+          <div class="legend-grid">
+            <span><i class="legend-swatch station"></i>場站</span>
+            <span><i class="legend-swatch route"></i>禁行路線</span>
+            <span><i class="legend-swatch area"></i>禁行區</span>
+            <span><i class="legend-swatch allowed"></i>可行駛路線</span>
+            <span><i class="legend-swatch approximate"></i>約略定位</span>
+          </div>
+          <ul>
+            <li><a href="https://apis.youbike.com.tw/json/station-yb2.json" target="_blank" rel="noopener">YouBike 官方場站資料</a></li>
+            <li><a href="https://dot.gov.taipei/cp.aspx?n=180956B21422E411&amp;s=EA957AA695CAE023" target="_blank" rel="noopener">臺北市交通局大貨車／聯結車專區</a></li>
+            <li><a href="https://www-ws.gov.taipei/001/Upload/456/relfile/22396/3462754/e3928591-a438-478a-9f15-3d4bb1ba77c0.pdf" target="_blank" rel="noopener">臺北市逐路段官方清單</a></li>
+            <li><a href="https://www.traffic.ntpc.gov.tw/home.jsp?id=165" target="_blank" rel="noopener">新北市交通局大貨車行駛路線及禁行區域圖</a></li>
+            <li><a href="https://data.ntpc.gov.tw/datasets/2924fbe5-852f-46f4-a829-45becd75eff5" target="_blank" rel="noopener">新北市時段性管制開放資料</a></li>
+          </ul>
+          <p class="source-note">場站資料擷取：2026-11-11。臺北逐路段清單統計至 2023-08-31；臺北全市規則依 2022-02-16 公告；新北官方地圖頁更新至 2026-08-25、路段清單於 2026-11-11 讀取。</p>
+        </details>
+      </div>
+    </aside>
+
+    <section class="map-shell" aria-label="互動地圖">
+      <div id="map" role="application" aria-label="雙北場站與大貨車管制互動地圖"></div>
+      <div class="map-key" aria-hidden="true">
+        <span><i class="legend-swatch route"></i>禁行</span>
+        <span><i class="legend-swatch allowed"></i>可行駛</span>
+        <span><i class="legend-swatch station"></i>場站</span>
+      </div>
+      <button id="locateButton" class="map-action locate-button" type="button" title="定位目前位置" aria-label="定位目前位置">⌖</button>
+      <div id="loadingState" class="loading-state">
+        <div class="spinner"></div>
+        <strong>載入雙北地圖資料</strong>
+        <span>場站與限制路段整理中…</span>
+      </div>
+    </section>
+  </main>
+
+  <div id="mobileBackdrop" class="mobile-backdrop"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
