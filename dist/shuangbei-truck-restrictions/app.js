@@ -27,7 +27,17 @@
   }).addTo(map);
 
   const canvasRenderer = L.canvas({ padding: 0.35, tolerance: 5 });
-  const stationLayer = L.layerGroup().addTo(map);
+  const stationLayer = L.markerClusterGroup ? L.markerClusterGroup({
+    chunkedLoading: true,
+    chunkInterval: 90,
+    chunkDelay: 35,
+    maxClusterRadius: 58,
+    disableClusteringAtZoom: 17,
+    removeOutsideVisibleBounds: true,
+    animate: false,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+  }).addTo(map) : L.layerGroup().addTo(map);
   const officialRouteLayer = L.layerGroup().addTo(map);
   const taipeiZoneLayer = L.layerGroup().addTo(map);
   const approximateLayer = L.layerGroup().addTo(map);
@@ -45,6 +55,7 @@
     recordMarkerById: new Map(),
     pageSize: 60,
     shown: 60,
+    stationSignature: "",
   };
 
   const escapeHtml = (value) => String(value ?? "")
@@ -179,17 +190,23 @@
   }
 
   function renderStations() {
+    const signature = [ui.showStations.checked, ui.city.value, ui.district.value, normalize(ui.search.value)].join("|");
+    if (signature === state.stationSignature) return;
+    state.stationSignature = signature;
     stationLayer.clearLayers();
     if (!ui.showStations.checked) return;
     const features = state.stations.filter(stationMatches);
+    const markers = [];
     for (const feature of features) {
       const [lng, lat] = feature.geometry.coordinates;
       const p = feature.properties;
       const color = p.city === "臺北市" ? "#08aebf" : "#516fe8";
-      L.circleMarker([lat, lng], {
+      markers.push(L.circleMarker([lat, lng], {
         renderer: canvasRenderer, radius: 3.3, weight: 1, color: "#fff", fillColor: color, fillOpacity: 0.88,
-      }).bindPopup(popupStation(p)).addTo(stationLayer);
+      }).bindPopup(() => popupStation(p)));
     }
+    if (stationLayer.addLayers) stationLayer.addLayers(markers);
+    else markers.forEach((marker) => marker.addTo(stationLayer));
   }
 
   function addGeoJsonFeature(feature, targetLayer, styleFn) {
@@ -369,7 +386,8 @@
     ui.time.value = "all";
     ui.showStations.checked = true;
     ui.showRestrictions.checked = true;
-    ui.showPermitted.checked = true;
+    ui.showPermitted.checked = false;
+    state.stationSignature = "";
     applyFilters();
     map.fitBounds([[24.78, 121.27], [25.31, 122.02]], { padding: [20, 20] });
   }

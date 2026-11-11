@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynWPw5ctHzqDZsHCJbJk9n2o2Dk0=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -99,7 +101,7 @@
             <legend>圖層</legend>
             <label><input id="showStations" type="checkbox" checked><span class="dot station-dot"></span>YouBike 場站</label>
             <label><input id="showRestrictions" type="checkbox" checked><span class="dot restricted-dot"></span>禁行路線／區域</label>
-            <label><input id="showPermitted" type="checkbox" checked><span class="line permitted-line"></span>可行駛路線</label>
+            <label><input id="showPermitted" type="checkbox"><span class="line permitted-line"></span>可行駛路線</label>
           </fieldset>
         </section>
 
@@ -154,6 +156,7 @@
 
   <div id="mobileBackdrop" class="mobile-backdrop"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

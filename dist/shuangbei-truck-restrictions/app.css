@@ -128,6 +128,17 @@ a { color: #1769aa; }
 .legend-swatch.allowed { background: var(--blue); }
 .legend-swatch.approximate { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
 
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large { background: rgba(19, 184, 201, .22); }
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  display: grid; place-items: center;
+  color: #fff; background: #0aa7b9; font-size: 11px; font-weight: 800;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.78), 0 3px 10px rgba(5,35,48,.22);
+}
+
 .map-shell { min-width: 0; position: relative; background: #dce5ea; }
 #map { width: 100%; height: 100%; background: #dce5ea; }
 .map-key { position: absolute; z-index: 700; top: 14px; right: 14px; display: flex; gap: 12px; padding: 8px 11px; border: 1px solid rgba(16,46,70,.12); border-radius: 10px; background: rgba(255,255,255,.94); box-shadow: 0 5px 16px rgba(14,35,52,.12); font-size: 10px; }
