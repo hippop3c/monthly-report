@@ -408,6 +408,10 @@
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); };
   }
 
+  const refreshMapSize = debounce(() => map.invalidateSize({ pan: false }), 120);
+  window.addEventListener("resize", refreshMapSize);
+  window.addEventListener("orientationchange", refreshMapSize);
+
   async function loadData() {
     try {
       const [stations, restrictions, routes, zones] = await Promise.all([
@@ -427,7 +431,10 @@
       ui.geometryTotal.textContent = state.kmlFeatures.length.toLocaleString();
       refreshDistricts();
       applyFilters();
-      map.fitBounds([[24.78, 121.27], [25.31, 122.02]], { padding: [12, 12] });
+      requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false });
+        map.fitBounds([[24.78, 121.27], [25.31, 122.02]], { padding: [12, 12] });
+      });
       ui.loading.classList.add("is-done");
     } catch (error) {
       console.error(error);
