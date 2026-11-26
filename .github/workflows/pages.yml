@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -26,6 +27,33 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+      - name: Wait for Pages artifact metadata
+        uses: actions/github-script@v8
+        with:
+          retries: 3
+          script: |
+            for (let attempt = 1; attempt <= 24; attempt++) {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                ...context.repo,
+                run_id: context.runId,
+                per_page: 100
+              });
+              const artifacts = data.artifacts.filter(
+                artifact => artifact.name === "github-pages" && !artifact.expired
+              );
+              if (artifacts.length === 1) {
+                core.info("Pages artifact metadata is available.");
+                return;
+              }
+              if (artifacts.length > 1) {
+                throw new Error("Multiple Pages artifacts found for this workflow run.");
+              }
+              core.info("Waiting for Pages artifact metadata (" + attempt + "/24).");
+              if (attempt < 24) {
+                await new Promise(resolve => setTimeout(resolve, 5000));
+              }
+            }
+            throw new Error("Pages artifact metadata did not become available.");
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
